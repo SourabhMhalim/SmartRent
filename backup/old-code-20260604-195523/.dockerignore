@@ -1,0 +1,14 @@
+.git
+.github
+.idea
+.vscode
+node_modules
+apps/web/.next
+apps/web/node_modules
+target
+**/target
+.env
+.env.*
+README.md
+docs
+

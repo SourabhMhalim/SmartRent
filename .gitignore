@@ -1,0 +1,32 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Next.js
+.next/
+out/
+apps/web/.env*.local
+apps/web/.vercel/
+
+# Java
+target/
+*.class
+
+# Local env and secrets
+.env
+.env.*
+!.env.example
+!apps/web/.env.local.example
+
+# IDE / OS
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+

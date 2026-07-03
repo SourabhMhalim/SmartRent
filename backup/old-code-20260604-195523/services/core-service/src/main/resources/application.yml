@@ -1,0 +1,26 @@
+server:
+  port: ${SERVER_PORT:8081}
+
+spring:
+  application:
+    name: core-service
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://db.szyzeroacnensxqnpgsw.supabase.co:5432/postgres}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+supabase:
+  url: ${SUPABASE_URL:https://szyzeroacnensxqnpgsw.supabase.co}
+  publishable-key: ${SUPABASE_PUBLISHABLE_KEY:${NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:}}

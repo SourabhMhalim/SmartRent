@@ -1,0 +1,57 @@
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: gateway
+  cloud:
+    gateway:
+      routes:
+        - id: auth-api
+          uri: ${CORE_SERVICE_URL:http://localhost:8081}
+          predicates:
+            - Path=/api/auth/**
+          filters:
+            - StripPrefix=1
+        - id: core-service
+          uri: ${CORE_SERVICE_URL:http://localhost:8081}
+          predicates:
+            - Path=/api/core/**
+          filters:
+            - StripPrefix=2
+        - id: billing-service
+          uri: ${BILLING_SERVICE_URL:http://localhost:8082}
+          predicates:
+            - Path=/api/billing/**
+          filters:
+            - StripPrefix=2
+        - id: ops-service
+          uri: ${OPS_SERVICE_URL:http://localhost:8083}
+          predicates:
+            - Path=/api/ops/**
+          filters:
+            - StripPrefix=2
+      globalcors:
+        corsConfigurations:
+          '[/**]':
+            allowedOrigins:
+              - http://localhost:3000
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - PATCH
+              - DELETE
+              - OPTIONS
+            allowedHeaders:
+              - '*'
+            allowCredentials: true
+
+supabase:
+  jwks-url: ${SUPABASE_JWKS_URL:https://szyzeroacnensxqnpgsw.supabase.co/auth/v1/.well-known/jwks.json}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

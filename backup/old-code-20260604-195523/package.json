@@ -1,0 +1,14 @@
+{
+  "name": "smartrent",
+  "private": true,
+  "packageManager": "pnpm@10.12.4",
+  "scripts": {
+    "dev:web": "pnpm --dir apps/web dev",
+    "build:web": "pnpm --dir apps/web build",
+    "lint:web": "pnpm --dir apps/web lint",
+    "test:java": "mvn test",
+    "docker:up": "docker compose up --build",
+    "docker:down": "docker compose down"
+  }
+}
+

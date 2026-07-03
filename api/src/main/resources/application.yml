@@ -1,0 +1,37 @@
+spring:
+  application:
+    name: smartrent-api
+  config:
+    import:
+      - "optional:file:../.env[.properties]"
+      - "optional:file:.env[.properties]"
+  datasource:
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
+    hikari:
+      maximum-pool-size: 5
+      minimum-idle: 1
+      connection-timeout: 10000
+      data-source-properties:
+        sslmode: require
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    baseline-version: 0
+    validate-migration-naming: true
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${SUPABASE_URL}/auth/v1
+          jwk-set-uri: ${SUPABASE_JWKS_URL}
+          jws-algorithms: ES256
+
+server:
+  port: 8080
+
+supabase:
+  url: ${SUPABASE_URL}
+  publishable-key: ${SUPABASE_PUBLISHABLE_KEY}

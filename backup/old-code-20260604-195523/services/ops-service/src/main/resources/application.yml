@@ -1,0 +1,28 @@
+server:
+  port: ${SERVER_PORT:8083}
+
+spring:
+  application:
+    name: ops-service
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://db.szyzeroacnensxqnpgsw.supabase.co:5432/postgres}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+  mail:
+    host: ${SMTP_HOST:localhost}
+    port: ${SMTP_PORT:1025}
+    username: ${SMTP_USERNAME:}
+    password: ${SMTP_PASSWORD:}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
