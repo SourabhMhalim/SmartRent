@@ -44,10 +44,12 @@ public class BillingRepository {
             join properties p on p.id = u.property_id and p.archived_at is null
             """;
 
-    private static final String INVOICE_SELECT = """
+    public static final String INVOICE_SELECT = """
             select i.id, i.invoice_number, i.lease_id, t.id as tenant_id,
                    t.full_name as tenant_name, u.id as unit_id, u.unit_number,
                    p.id as property_id, p.name as property_name,
+                   landlord.upi_payee_name as landlord_upi_payee_name,
+                   landlord.upi_id as landlord_upi_id,
                    i.billing_month, i.due_date, i.base_rent,
                    mr.previous_reading, mr.current_reading, mr.electricity_rate,
                    mr.electricity_units, i.electricity_amount, i.total_amount,
@@ -56,12 +58,14 @@ public class BillingRepository {
                            then 'OVERDUE'
                        else i.status
                    end as effective_status,
-                   i.payment_utr, i.paid_at, i.created_at, i.updated_at
+                   i.payment_utr, i.paid_at, i.payment_submitted_utr,
+                   i.payment_submitted_at, i.created_at, i.updated_at
             from invoices i
             join leases l on l.id = i.lease_id
             join tenants t on t.id = l.tenant_id
             join units u on u.id = l.unit_id
             join properties p on p.id = u.property_id
+            join profiles landlord on landlord.id = i.landlord_id
             join meter_readings mr on mr.id = i.meter_reading_id
             """;
 
@@ -150,13 +154,99 @@ public class BillingRepository {
                 """, INVOICE_MAPPER, landlordId, invoiceId).stream().findFirst();
     }
 
+    public Optional<InvoiceResponse> findPublicInvoice(UUID invoiceId) {
+        return jdbcTemplate.query(INVOICE_SELECT + """
+                where i.id = ?
+                """, INVOICE_MAPPER, invoiceId).stream().findFirst();
+    }
+
     public boolean paymentUtrExists(UUID landlordId, String utr) {
         Integer count = jdbcTemplate.queryForObject("""
                 select count(*)
                 from invoices
-                where landlord_id = ? and payment_utr = ?
-                """, Integer.class, landlordId, utr);
+                where landlord_id = ?
+                  and (payment_utr = ? or payment_submitted_utr = ?)
+                """, Integer.class, landlordId, utr, utr);
         return count != null && count > 0;
+    }
+
+    public boolean paymentUtrUsedByOtherInvoice(
+            UUID landlordId,
+            UUID invoiceId,
+            String utr
+    ) {
+        Integer count = jdbcTemplate.queryForObject("""
+                select count(*)
+                from invoices
+                where landlord_id = ? and id <> ?
+                  and (payment_utr = ? or payment_submitted_utr = ?)
+                """, Integer.class, landlordId, invoiceId, utr, utr);
+        return count != null && count > 0;
+    }
+
+    public boolean paymentUtrExistsForTenant(UUID tenantUserId, String utr) {
+        Integer count = jdbcTemplate.queryForObject("""
+                select count(*)
+                from invoices i
+                join tenants t on t.landlord_id = i.landlord_id
+                where t.tenant_user_id = ?
+                  and (i.payment_utr = ? or i.payment_submitted_utr = ?)
+                """, Integer.class, tenantUserId, utr, utr);
+        return count != null && count > 0;
+    }
+
+    public Optional<InvoiceResponse> findTenantInvoice(UUID tenantUserId, UUID invoiceId) {
+        return jdbcTemplate.query(INVOICE_SELECT + """
+                where t.tenant_user_id = ? and i.id = ?
+                """, INVOICE_MAPPER, tenantUserId, invoiceId).stream().findFirst();
+    }
+
+    public Optional<UUID> findTenantInvoiceLandlordId(UUID tenantUserId, UUID invoiceId) {
+        return jdbcTemplate.query("""
+                        select i.landlord_id
+                        from invoices i
+                        join leases l on l.id = i.lease_id
+                        join tenants t on t.id = l.tenant_id
+                        where t.tenant_user_id = ? and i.id = ?
+                        """,
+                (resultSet, rowNumber) -> resultSet.getObject("landlord_id", UUID.class),
+                tenantUserId,
+                invoiceId
+        ).stream().findFirst();
+    }
+
+    public int submitTenantPayment(UUID tenantUserId, UUID invoiceId, String utr) {
+        return jdbcTemplate.update("""
+                update invoices i
+                set payment_submitted_utr = ?, payment_submitted_at = now(),
+                    updated_at = now()
+                from leases l
+                join tenants t on t.id = l.tenant_id
+                where i.lease_id = l.id and t.tenant_user_id = ?
+                  and i.id = ? and i.status = 'PENDING'
+                  and i.payment_submitted_utr is null
+                """, utr, tenantUserId, invoiceId);
+    }
+
+    public int approveSubmittedPayment(UUID landlordId, UUID invoiceId) {
+        return jdbcTemplate.update("""
+                update invoices
+                set status = 'PAID', payment_utr = payment_submitted_utr,
+                    payment_submitted_utr = null, payment_submitted_at = null,
+                    paid_at = now(), updated_at = now()
+                where landlord_id = ? and id = ? and status = 'PENDING'
+                  and payment_submitted_utr is not null
+                """, landlordId, invoiceId);
+    }
+
+    public int rejectSubmittedPayment(UUID landlordId, UUID invoiceId) {
+        return jdbcTemplate.update("""
+                update invoices
+                set payment_submitted_utr = null, payment_submitted_at = null,
+                    updated_at = now()
+                where landlord_id = ? and id = ? and status = 'PENDING'
+                  and payment_submitted_utr is not null
+                """, landlordId, invoiceId);
     }
 
     public int verifyPayment(UUID landlordId, UUID invoiceId, String utr) {
@@ -183,7 +273,7 @@ public class BillingRepository {
                     resultSet.getBigDecimal("previous_reading")
             );
 
-    private static final RowMapper<InvoiceResponse> INVOICE_MAPPER =
+    public static final RowMapper<InvoiceResponse> INVOICE_MAPPER =
             (resultSet, rowNumber) -> new InvoiceResponse(
                     resultSet.getObject("id", UUID.class),
                     resultSet.getString("invoice_number"),
@@ -194,6 +284,8 @@ public class BillingRepository {
                     resultSet.getString("unit_number"),
                     resultSet.getObject("property_id", UUID.class),
                     resultSet.getString("property_name"),
+                    resultSet.getString("landlord_upi_payee_name"),
+                    resultSet.getString("landlord_upi_id"),
                     YearMonth.from(resultSet.getDate("billing_month").toLocalDate()).toString(),
                     resultSet.getDate("due_date").toLocalDate(),
                     resultSet.getBigDecimal("base_rent"),
@@ -206,6 +298,8 @@ public class BillingRepository {
                     invoiceStatus(resultSet.getString("effective_status")),
                     resultSet.getString("payment_utr"),
                     instant(resultSet, "paid_at"),
+                    resultSet.getString("payment_submitted_utr"),
+                    instant(resultSet, "payment_submitted_at"),
                     instant(resultSet, "created_at"),
                     instant(resultSet, "updated_at")
             );

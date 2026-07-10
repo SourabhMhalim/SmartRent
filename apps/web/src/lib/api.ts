@@ -20,6 +20,14 @@ export type AuthSession = {
   };
 };
 
+export type CurrentUser = {
+  id: string;
+  email: string;
+  fullName: string;
+  phone?: string;
+  role: "LANDLORD" | "PROPERTY_MANAGER" | "TENANT";
+};
+
 export async function apiRequest<T>(
   path: string,
   options: RequestInit = {},
@@ -57,6 +65,35 @@ export async function authenticatedApiRequest<T>(
       ...options.headers,
     },
   });
+}
+
+export async function authenticatedBlobRequest(
+  path: string,
+  options: RequestInit = {},
+): Promise<Blob> {
+  const session = getSession();
+  if (!session) {
+    throw new Error("Your session has expired. Please sign in again.");
+  }
+
+  const response = await fetch(`${API_URL}${path}`, {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${session.access_token}`,
+      ...options.headers,
+    },
+  });
+
+  if (!response.ok) {
+    const body = (await response.json().catch(() => ({}))) as ApiError;
+    throw new Error(body.message ?? "Request failed. Please try again.");
+  }
+
+  return response.blob();
+}
+
+export function getCurrentUser() {
+  return authenticatedApiRequest<CurrentUser>("/api/me");
 }
 
 export function storeSession(session: AuthSession, remember: boolean) {

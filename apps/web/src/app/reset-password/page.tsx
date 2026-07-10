@@ -60,7 +60,7 @@ export default function ResetPasswordPage() {
 
   return (
     <AuthLayout
-      description="Choose a strong password for your landlord workspace and keep your rental records protected."
+      description="Choose a strong password for your property owner workspace and keep your rental records protected."
       eyebrow="Secure your account"
       title="Create a fresh password."
     >

@@ -1,6 +1,6 @@
 "use client";
 
-import { AuthSession, getSession } from "@/lib/api";
+import { AuthSession, getCurrentUser, getSession } from "@/lib/api";
 import { useRouter } from "next/navigation";
 import { ReactNode, useEffect, useState } from "react";
 
@@ -13,6 +13,7 @@ export function DashboardAuthGuard({
   const [session, setSession] = useState<AuthSession | null>(null);
 
   useEffect(() => {
+    let active = true;
     const currentSession = getSession();
 
     if (!currentSession) {
@@ -20,7 +21,27 @@ export function DashboardAuthGuard({
       return;
     }
 
-    setSession(currentSession);
+    getCurrentUser()
+      .then((user) => {
+        if (!active) {
+          return;
+        }
+        if (user.role === "TENANT") {
+          router.replace("/tenant-dashboard");
+          return;
+        }
+        setSession(currentSession);
+      })
+      .catch(() => {
+        if (!active) {
+          return;
+        }
+        router.replace("/login");
+      });
+
+    return () => {
+      active = false;
+    };
   }, [router]);
 
   if (!session) {

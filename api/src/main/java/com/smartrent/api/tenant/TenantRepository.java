@@ -17,6 +17,7 @@ import com.smartrent.api.tenant.TenantModels.LeaseRequest;
 import com.smartrent.api.tenant.TenantModels.LeaseResponse;
 import com.smartrent.api.tenant.TenantModels.TenantRequest;
 import com.smartrent.api.tenant.TenantModels.TenantResponse;
+import com.smartrent.api.billing.BillingModels.InvoiceResponse;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
@@ -77,6 +78,12 @@ public class TenantRepository {
         return jdbcTemplate.query(TENANT_SELECT + """
                 where t.landlord_id = ? and t.id = ? and t.archived_at is null
                 """, TENANT_MAPPER, landlordId, tenantId).stream().findFirst();
+    }
+
+    public Optional<TenantResponse> findTenantByUserId(UUID tenantUserId) {
+        return jdbcTemplate.query(TENANT_SELECT + """
+                where t.tenant_user_id = ? and t.archived_at is null
+                """, TENANT_MAPPER, tenantUserId).stream().findFirst();
     }
 
     public TenantResponse updateTenant(
@@ -192,6 +199,13 @@ public class TenantRepository {
                 set status = 'ENDED', end_date = ?, updated_at = now()
                 where landlord_id = ? and id = ? and status = 'ACTIVE'
                 """, Date.valueOf(endDate), landlordId, leaseId);
+    }
+
+    public List<InvoiceResponse> findInvoicesByTenantUserId(UUID tenantUserId) {
+        return jdbcTemplate.query(com.smartrent.api.billing.BillingRepository.INVOICE_SELECT + """
+                where t.tenant_user_id = ?
+                order by i.billing_month desc, i.created_at desc
+                """, com.smartrent.api.billing.BillingRepository.INVOICE_MAPPER, tenantUserId);
     }
 
     private static final RowMapper<TenantResponse> TENANT_MAPPER =

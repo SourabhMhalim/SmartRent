@@ -82,6 +82,8 @@ public final class BillingModels {
             String unitNumber,
             UUID propertyId,
             String propertyName,
+            String landlordUpiPayeeName,
+            String landlordUpiId,
             String billingMonth,
             LocalDate dueDate,
             BigDecimal baseRent,
@@ -94,9 +96,41 @@ public final class BillingModels {
             InvoiceStatus status,
             String paymentUtr,
             Instant paidAt,
+            String submittedPaymentUtr,
+            Instant paymentSubmittedAt,
             Instant createdAt,
             Instant updatedAt
     ) {
+    }
+
+    public record PublicInvoicePaymentResponse(
+            UUID id,
+            String invoiceNumber,
+            String propertyName,
+            String unitNumber,
+            String landlordUpiPayeeName,
+            String landlordUpiId,
+            String billingMonth,
+            LocalDate dueDate,
+            BigDecimal totalAmount,
+            InvoiceStatus status,
+            String submittedPaymentUtr
+    ) {
+        public static PublicInvoicePaymentResponse from(InvoiceResponse invoice) {
+            return new PublicInvoicePaymentResponse(
+                    invoice.id(),
+                    invoice.invoiceNumber(),
+                    invoice.propertyName(),
+                    invoice.unitNumber(),
+                    invoice.landlordUpiPayeeName(),
+                    invoice.landlordUpiId(),
+                    invoice.billingMonth(),
+                    invoice.dueDate(),
+                    invoice.totalAmount(),
+                    invoice.status(),
+                    invoice.submittedPaymentUtr()
+            );
+        }
     }
 
     static InvoiceStatus invoiceStatus(String value) {

@@ -12,8 +12,10 @@ import com.smartrent.api.billing.BillingModels.BillableLeaseResponse;
 import com.smartrent.api.billing.BillingModels.GenerateInvoiceRequest;
 import com.smartrent.api.billing.BillingModels.InvoiceResponse;
 import com.smartrent.api.billing.BillingModels.InvoiceStatus;
+import com.smartrent.api.billing.BillingModels.PublicInvoicePaymentResponse;
 import com.smartrent.api.billing.BillingModels.VerifyPaymentRequest;
 import com.smartrent.api.common.DomainException;
+import com.smartrent.api.notification.NotificationService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,9 +23,14 @@ import org.springframework.transaction.annotation.Transactional;
 public class BillingService {
 
     private final BillingRepository repository;
+    private final NotificationService notificationService;
 
-    public BillingService(BillingRepository repository) {
+    public BillingService(
+            BillingRepository repository,
+            NotificationService notificationService
+    ) {
         this.repository = repository;
+        this.notificationService = notificationService;
     }
 
     public List<BillableLeaseResponse> listBillableLeases(UUID landlordId) {
@@ -41,6 +48,118 @@ public class BillingService {
                         "Invoice was not found.",
                         "invoice_not_found"
                 ));
+    }
+
+    public InvoiceResponse getTenantInvoice(UUID tenantUserId, UUID invoiceId) {
+        return repository.findTenantInvoice(tenantUserId, invoiceId)
+                .orElseThrow(() -> new DomainException(
+                        404,
+                        "Invoice was not found.",
+                        "invoice_not_found"
+                ));
+    }
+
+    public PublicInvoicePaymentResponse getPublicInvoicePayment(UUID invoiceId) {
+        InvoiceResponse invoice = repository.findPublicInvoice(invoiceId)
+                .orElseThrow(() -> new DomainException(
+                        404,
+                        "Invoice was not found.",
+                        "invoice_not_found"
+                ));
+        return PublicInvoicePaymentResponse.from(invoice);
+    }
+
+    @Transactional
+    public InvoiceResponse submitTenantPayment(
+            UUID tenantUserId,
+            UUID invoiceId,
+            VerifyPaymentRequest request
+    ) {
+        InvoiceResponse invoice = repository.findTenantInvoice(tenantUserId, invoiceId)
+                .orElseThrow(() -> new DomainException(
+                        404, "Invoice was not found.", "invoice_not_found"
+                ));
+        if (invoice.status() == InvoiceStatus.PAID
+                || invoice.status() == InvoiceStatus.CANCELLED) {
+            throw new DomainException(
+                    409,
+                    "Payment cannot be submitted for this invoice.",
+                    "invoice_not_payable"
+            );
+        }
+        if (invoice.submittedPaymentUtr() != null) {
+            throw new DomainException(
+                    409,
+                    "A payment reference is already awaiting landlord review.",
+                    "payment_already_submitted"
+            );
+        }
+        if (repository.paymentUtrExistsForTenant(tenantUserId, request.utr())) {
+            throw new DomainException(
+                    409,
+                    "This UPI transaction reference has already been used.",
+                    "payment_utr_duplicate"
+            );
+        }
+        if (repository.submitTenantPayment(tenantUserId, invoiceId, request.utr()) != 1) {
+            throw new DomainException(
+                    409,
+                    "The invoice changed. Refresh and try again.",
+                    "invoice_payment_conflict"
+            );
+        }
+        InvoiceResponse submittedInvoice = repository.findTenantInvoice(tenantUserId, invoiceId)
+                .orElseThrow();
+        repository.findTenantInvoiceLandlordId(tenantUserId, invoiceId)
+                .ifPresent(landlordId ->
+                        notificationService.paymentSubmitted(landlordId, submittedInvoice));
+        return submittedInvoice;
+    }
+
+    @Transactional
+    public InvoiceResponse approveSubmittedPayment(UUID landlordId, UUID invoiceId) {
+        InvoiceResponse invoice = getInvoice(landlordId, invoiceId);
+        if (invoice.submittedPaymentUtr() == null) {
+            throw new DomainException(
+                    409,
+                    "No tenant payment reference is awaiting review.",
+                    "payment_submission_not_found"
+            );
+        }
+        if (repository.paymentUtrUsedByOtherInvoice(
+                landlordId, invoiceId, invoice.submittedPaymentUtr()
+        )) {
+            throw new DomainException(
+                    409,
+                    "This UPI transaction reference has already been used.",
+                    "payment_utr_duplicate"
+            );
+        }
+        if (repository.approveSubmittedPayment(landlordId, invoiceId) != 1) {
+            throw new DomainException(
+                    409,
+                    "The invoice payment status changed. Refresh and try again.",
+                    "invoice_payment_conflict"
+            );
+        }
+        InvoiceResponse paidInvoice = getInvoice(landlordId, invoiceId);
+        notificationService.paymentVerified(landlordId, paidInvoice);
+        return paidInvoice;
+    }
+
+    @Transactional
+    public InvoiceResponse rejectSubmittedPayment(UUID landlordId, UUID invoiceId) {
+        InvoiceResponse invoice = getInvoice(landlordId, invoiceId);
+        if (invoice.submittedPaymentUtr() == null
+                || repository.rejectSubmittedPayment(landlordId, invoiceId) != 1) {
+            throw new DomainException(
+                    409,
+                    "No tenant payment reference is awaiting review.",
+                    "payment_submission_not_found"
+            );
+        }
+        notificationService.paymentRejected(invoice);
+        return getInvoice(landlordId, invoiceId);
     }
 
     @Transactional
@@ -78,7 +197,9 @@ public class BillingService {
                     "invoice_payment_conflict"
             );
         }
-        return getInvoice(landlordId, invoiceId);
+        InvoiceResponse paidInvoice = getInvoice(landlordId, invoiceId);
+        notificationService.paymentVerified(landlordId, paidInvoice);
+        return paidInvoice;
     }
 
     @Transactional
@@ -92,17 +213,8 @@ public class BillingService {
                         409,
                         "The selected lease is not active or available for billing.",
                         "lease_not_billable"
-                ));
+        ));
         YearMonth billingMonth = parseMonth(request.billingMonth());
-        YearMonth currentMonth = YearMonth.now();
-
-        if (!billingMonth.equals(currentMonth)) {
-            throw new DomainException(
-                    400,
-                    "Invoices can only be generated for the current month.",
-                    "billing_month_not_current"
-            );
-        }
         LocalDate monthStart = billingMonth.atDay(1);
         LocalDate monthEnd = billingMonth.atEndOfMonth();
 
@@ -144,7 +256,7 @@ public class BillingService {
                 .multiply(lease.electricityRate())
                 .setScale(2, RoundingMode.HALF_UP);
 
-        return repository.createInvoice(
+        InvoiceResponse invoice = repository.createInvoice(
                 landlordId,
                 lease,
                 billingMonth,
@@ -153,6 +265,8 @@ public class BillingService {
                 electricityUnits,
                 electricityAmount
         );
+        notificationService.invoiceGenerated(landlordId, invoice);
+        return invoice;
     }
 
     private YearMonth parseMonth(String value) {

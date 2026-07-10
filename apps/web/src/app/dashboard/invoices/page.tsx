@@ -7,6 +7,7 @@ import {
   GenerateInvoiceInput,
   Invoice,
   InvoiceStatus,
+  downloadInvoicePdf,
   generateInvoice,
   listBillableLeases,
   listInvoices,
@@ -16,6 +17,7 @@ import {
   ArrowRight,
   CheckCircle2,
   Clock3,
+  Download,
   FilePlus2,
   FileText,
   Search,
@@ -42,6 +44,7 @@ export default function InvoicesPage() {
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
+  const [downloadingPdfId, setDownloadingPdfId] = useState<string | null>(null);
 
   useEffect(() => {
     void loadBilling();
@@ -104,6 +107,20 @@ export default function InvoicesPage() {
       );
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function handleDownloadPdf(invoice: Invoice) {
+    setLoadError("");
+    setDownloadingPdfId(invoice.id);
+    try {
+      downloadBlob(await downloadInvoicePdf(invoice.id), `${invoice.invoiceNumber}.pdf`);
+    } catch (error) {
+      setLoadError(
+        error instanceof Error ? error.message : "Unable to download invoice PDF.",
+      );
+    } finally {
+      setDownloadingPdfId(null);
     }
   }
 
@@ -311,8 +328,10 @@ export default function InvoicesPage() {
       ) : null}
       {selectedInvoice ? (
         <InvoiceDetailsModal
+          downloadingPdf={downloadingPdfId === selectedInvoice.id}
           invoice={selectedInvoice}
           onClose={() => setSelectedInvoice(null)}
+          onDownloadPdf={() => handleDownloadPdf(selectedInvoice)}
         />
       ) : null}
     </main>
@@ -384,11 +403,15 @@ function StatusBadge({ status }: { status: InvoiceStatus }) {
 }
 
 function InvoiceDetailsModal({
+  downloadingPdf,
   invoice,
   onClose,
+  onDownloadPdf,
 }: {
+  downloadingPdf: boolean;
   invoice: Invoice;
   onClose: () => void;
+  onDownloadPdf: () => void;
 }) {
   const units = invoice.electricityUnits;
   return (
@@ -469,15 +492,26 @@ function InvoiceDetailsModal({
         </div>
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[#E2E8F0] bg-[#F8FAFC] px-6 py-4">
           <p className="text-xs font-semibold text-[#986A05]">
-            Payment actions will be added in the payments module.
+            Download this invoice for sharing or record keeping.
           </p>
-          <button
-            className="min-h-11 rounded-md border border-[#CBD5E1] bg-white px-5 text-sm font-bold hover:bg-[#F1F5F9]"
-            onClick={onClose}
-            type="button"
-          >
-            Close
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              className="inline-flex min-h-11 items-center gap-2 rounded-md bg-[#0F172A] px-5 text-sm font-bold text-white hover:bg-[#1E293B] disabled:cursor-wait disabled:bg-[#94A3B8]"
+              disabled={downloadingPdf}
+              onClick={onDownloadPdf}
+              type="button"
+            >
+              <Download size={16} />
+              {downloadingPdf ? "Preparing..." : "Download PDF"}
+            </button>
+            <button
+              className="min-h-11 rounded-md border border-[#CBD5E1] bg-white px-5 text-sm font-bold hover:bg-[#F1F5F9]"
+              onClick={onClose}
+              type="button"
+            >
+              Close
+            </button>
+          </div>
         </div>
       </article>
     </div>
@@ -532,4 +566,15 @@ function formatDate(value: string) {
     month: "short",
     year: "numeric",
   }).format(new Date(`${value}T00:00:00`));
+}
+
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }

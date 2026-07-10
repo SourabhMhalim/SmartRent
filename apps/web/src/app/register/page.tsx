@@ -48,13 +48,13 @@ export default function RegisterPage() {
   return (
     <AuthLayout
       description="Start with your first property, then add rooms, tenants, and leases at your own pace."
-      eyebrow="Built for independent landlords"
+      eyebrow="Built for independent property owners"
       title="Set up your rental workspace."
     >
       <div className="auth-card">
         <p className="text-sm font-semibold text-[#0F766E]">Get started</p>
         <h1 className="font-display mt-2 text-3xl font-extrabold tracking-normal">
-          Create landlord account
+          Create property owner account
         </h1>
         <p className="mt-2 text-sm leading-6 text-[#64748B]">
           This creates the owner of your SmartRent workspace.

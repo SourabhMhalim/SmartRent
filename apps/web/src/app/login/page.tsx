@@ -3,7 +3,7 @@
 import { AuthLayout } from "@/components/auth-layout";
 import { FormNotice } from "@/components/form-notice";
 import { PasswordInput } from "@/components/password-input";
-import { apiRequest, AuthSession, storeSession } from "@/lib/api";
+import { apiRequest, AuthSession, getCurrentUser, storeSession } from "@/lib/api";
 import { ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -31,7 +31,8 @@ export default function LoginPage() {
       });
 
       storeSession(session, form.get("remember") === "on");
-      router.push("/dashboard");
+      const user = await getCurrentUser();
+      router.push(user.role === "TENANT" ? "/tenant-dashboard" : "/dashboard");
     } catch (requestError) {
       setError(
         requestError instanceof Error
@@ -46,7 +47,7 @@ export default function LoginPage() {
   return (
     <AuthLayout
       description="Keep properties, tenants, and monthly rent activity together in one calm workspace."
-      eyebrow="Landlord workspace"
+      eyebrow="Property Owner workspace"
       title="Rental work, with fewer loose ends."
     >
       <div className="auth-card">
@@ -55,7 +56,7 @@ export default function LoginPage() {
           Sign in to SmartRent
         </h1>
         <p className="mt-2 text-sm leading-6 text-[#64748B]">
-          Use your landlord account to continue.
+          Use your property owner or tenant account to continue.
         </p>
 
         <form className="mt-8 space-y-5" onSubmit={handleSubmit}>
@@ -122,7 +123,16 @@ export default function LoginPage() {
         <p className="mt-7 text-center text-sm text-[#64748B]">
           New to SmartRent?{" "}
           <Link className="font-bold text-[#0F766E] hover:underline" href="/register">
-            Create landlord account
+            Create property owner account
+          </Link>
+        </p>
+        <p className="mt-3 text-center text-sm text-[#64748B]">
+          Tenant with an invitation?{" "}
+          <Link
+            className="font-bold text-[#0F766E] hover:underline"
+            href="/tenant-register"
+          >
+            Activate tenant account
           </Link>
         </p>
       </div>

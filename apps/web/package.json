@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "smoke:payments": "node scripts/payment-flow-smoke.mjs",
     "start": "next start",
     "lint": "eslint"
   },

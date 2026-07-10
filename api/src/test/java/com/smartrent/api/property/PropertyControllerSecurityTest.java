@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.util.List;
 import java.util.UUID;
 
+import com.smartrent.api.auth.AuthorizationService;
 import com.smartrent.api.config.SecurityConfig;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,6 +29,9 @@ class PropertyControllerSecurityTest {
     private PropertyService service;
 
     @MockitoBean
+    private AuthorizationService authorizationService;
+
+    @MockitoBean
     private JwtDecoder jwtDecoder;
 
     @Test
@@ -39,6 +43,9 @@ class PropertyControllerSecurityTest {
     @Test
     void passesTheAuthenticatedLandlordIdToTheService() throws Exception {
         UUID landlordId = UUID.randomUUID();
+        org.mockito.Mockito.when(authorizationService.requireLandlordWorkspace(
+                        org.mockito.ArgumentMatchers.any()))
+                .thenReturn(landlordId);
         org.mockito.Mockito.when(service.listProperties(landlordId, ""))
                 .thenReturn(List.of());
 

@@ -117,7 +117,7 @@ export default function ProfilePage() {
         <div>
           <p className="text-sm font-semibold text-[#0F766E]">Account settings</p>
           <h2 className="font-display mt-1 text-2xl font-extrabold md:text-3xl">
-            Landlord profile
+            Property Owner profile
           </h2>
           <p className="mt-2 text-sm text-[#64748B]">
             Manage account information and the UPI details used on tenant invoices.
@@ -127,7 +127,7 @@ export default function ProfilePage() {
         <form className="mt-7 grid gap-5" onSubmit={saveProfile}>
           <section className="panel overflow-hidden">
             <ProfileSectionHeader
-              description="Basic details for the landlord workspace."
+              description="Basic details for the property owner workspace."
               icon={UserRound}
               title="Personal information"
             />
@@ -181,7 +181,7 @@ export default function ProfilePage() {
                     className="field"
                     defaultValue={profile.upiPayeeName ?? ""}
                     name="upiPayeeName"
-                    placeholder="Landlord or business name"
+                    placeholder="Property owner or business name"
                   />
                 </label>
                 <label>
@@ -190,7 +190,7 @@ export default function ProfilePage() {
                     className="field"
                     defaultValue={profile.upiId ?? ""}
                     name="upiId"
-                    placeholder="landlord@bank"
+                    placeholder="owner@bank"
                   />
                 </label>
                 <p className="text-xs leading-5 text-[#64748B]">
@@ -249,7 +249,7 @@ export default function ProfilePage() {
       {pendingProfile ? (
         <ConfirmationModal
           confirmLabel="Save profile"
-          description="Confirm these landlord profile and UPI collection details before they are used on future tenant invoices."
+          description="Confirm these property owner profile and UPI collection details before they are used on future tenant invoices."
           error={error}
           onCancel={() => {
             if (!saving) {
@@ -259,7 +259,7 @@ export default function ProfilePage() {
           onConfirm={confirmSaveProfile}
           pendingLabel="Saving..."
           submitting={saving}
-          title="Save landlord profile?"
+          title="Save property owner profile?"
         />
       ) : null}
     </main>

@@ -1,4 +1,4 @@
-import { authenticatedApiRequest } from "@/lib/api";
+import { authenticatedApiRequest, authenticatedBlobRequest } from "@/lib/api";
 
 export type InvoiceStatus = "PENDING" | "PAID" | "OVERDUE" | "CANCELLED";
 
@@ -27,6 +27,8 @@ export type Invoice = {
   unitNumber: string;
   propertyId: string;
   propertyName: string;
+  landlordUpiPayeeName?: string;
+  landlordUpiId?: string;
   billingMonth: string;
   dueDate: string;
   baseRent: number;
@@ -39,6 +41,8 @@ export type Invoice = {
   status: InvoiceStatus;
   paymentUtr?: string;
   paidAt?: string;
+  submittedPaymentUtr?: string;
+  paymentSubmittedAt?: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -62,6 +66,10 @@ export function getInvoice(invoiceId: string) {
   return authenticatedApiRequest<Invoice>(`/api/invoices/${invoiceId}`);
 }
 
+export function downloadInvoicePdf(invoiceId: string) {
+  return authenticatedBlobRequest(`/api/invoices/${invoiceId}/pdf`);
+}
+
 export function generateInvoice(input: GenerateInvoiceInput) {
   return authenticatedApiRequest<Invoice>("/api/invoices", {
     method: "POST",
@@ -76,5 +84,19 @@ export function verifyInvoicePayment(invoiceId: string, utr: string) {
       method: "POST",
       body: JSON.stringify({ utr }),
     },
+  );
+}
+
+export function approveInvoicePayment(invoiceId: string) {
+  return authenticatedApiRequest<Invoice>(
+    `/api/invoices/${invoiceId}/approve-payment`,
+    { method: "POST" },
+  );
+}
+
+export function rejectInvoicePayment(invoiceId: string) {
+  return authenticatedApiRequest<Invoice>(
+    `/api/invoices/${invoiceId}/reject-payment`,
+    { method: "POST" },
   );
 }

@@ -20,6 +20,7 @@ import com.smartrent.api.billing.BillingModels.InvoiceResponse;
 import com.smartrent.api.billing.BillingModels.InvoiceStatus;
 import com.smartrent.api.billing.BillingModels.VerifyPaymentRequest;
 import com.smartrent.api.common.DomainException;
+import com.smartrent.api.notification.NotificationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -33,11 +34,14 @@ class BillingServiceTest {
     @Mock
     private BillingRepository repository;
 
+    @Mock
+    private NotificationService notificationService;
+
     private BillingService service;
 
     @BeforeEach
     void setUp() {
-        service = new BillingService(repository);
+        service = new BillingService(repository, notificationService);
     }
 
     @Test
@@ -58,7 +62,7 @@ class BillingServiceTest {
         verify(repository, never()).createInvoice(
                 eq(landlordId),
                 eq(lease),
-                eq(YearMonth.of(2026, 6)),
+                eq(testMonth()),
                 eq(request.dueDate()),
                 org.mockito.ArgumentMatchers.any(),
                 org.mockito.ArgumentMatchers.any(),
@@ -76,7 +80,7 @@ class BillingServiceTest {
         when(repository.invoiceExists(
                 landlordId,
                 lease.leaseId(),
-                LocalDate.of(2026, 6, 1)
+                testMonth().atDay(1)
         )).thenReturn(true);
 
         assertThatThrownBy(() -> service.generateInvoice(landlordId, request))
@@ -95,12 +99,12 @@ class BillingServiceTest {
         when(repository.invoiceExists(
                 landlordId,
                 lease.leaseId(),
-                LocalDate.of(2026, 6, 1)
+                testMonth().atDay(1)
         )).thenReturn(false);
         when(repository.createInvoice(
                 eq(landlordId),
                 eq(lease),
-                eq(YearMonth.of(2026, 6)),
+                eq(testMonth()),
                 eq(request.dueDate()),
                 eq(new BigDecimal("132.50")),
                 org.mockito.ArgumentMatchers.any(),
@@ -114,7 +118,7 @@ class BillingServiceTest {
         verify(repository).createInvoice(
                 eq(landlordId),
                 eq(lease),
-                eq(YearMonth.of(2026, 6)),
+                eq(testMonth()),
                 eq(request.dueDate()),
                 eq(new BigDecimal("132.50")),
                 units.capture(),
@@ -122,16 +126,17 @@ class BillingServiceTest {
         );
         assertThat(units.getValue()).isEqualByComparingTo("12.50");
         assertThat(amount.getValue()).isEqualByComparingTo("112.50");
+        verify(notificationService).invoiceGenerated(landlordId, response);
     }
 
     @Test
-    void rejectsBillingMonthOtherThanCurrentMonth() {
+    void rejectsBillingMonthOutsideLeasePeriod() {
         UUID landlordId = UUID.randomUUID();
         BillableLeaseResponse lease = lease();
         GenerateInvoiceRequest request = new GenerateInvoiceRequest(
                 lease.leaseId(),
-                YearMonth.now().minusMonths(1).toString(),
-                YearMonth.now().minusMonths(1).atDay(5),
+                YearMonth.of(2026, 4).toString(),
+                LocalDate.of(2026, 4, 5),
                 new BigDecimal("130")
         );
         when(repository.findBillableLease(landlordId, lease.leaseId()))
@@ -139,7 +144,7 @@ class BillingServiceTest {
 
         assertThatThrownBy(() -> service.generateInvoice(landlordId, request))
                 .isInstanceOf(DomainException.class)
-                .hasMessage("Invoices can only be generated for the current month.");
+                .hasMessage("Billing month must fall within the lease period.");
 
         verify(repository, never()).createInvoice(
                 eq(landlordId),
@@ -160,11 +165,13 @@ class BillingServiceTest {
                 pending.id(), pending.invoiceNumber(), pending.leaseId(),
                 pending.tenantId(), pending.tenantName(), pending.unitId(),
                 pending.unitNumber(), pending.propertyId(), pending.propertyName(),
+                pending.landlordUpiPayeeName(), pending.landlordUpiId(),
                 pending.billingMonth(), pending.dueDate(), pending.baseRent(),
                 pending.previousReading(), pending.currentReading(),
                 pending.electricityRate(), pending.electricityUnits(),
                 pending.electricityAmount(), pending.totalAmount(), InvoiceStatus.PAID,
-                "591488569305", Instant.now(), pending.createdAt(), Instant.now()
+                "591488569305", Instant.now(), null, null,
+                pending.createdAt(), Instant.now()
         );
         when(repository.findInvoice(landlordId, pending.id()))
                 .thenReturn(Optional.of(pending), Optional.of(paid));
@@ -181,13 +188,105 @@ class BillingServiceTest {
 
         assertThat(result.status()).isEqualTo(InvoiceStatus.PAID);
         assertThat(result.paymentUtr()).isEqualTo("591488569305");
+        verify(notificationService).paymentVerified(landlordId, paid);
+    }
+
+    @Test
+    void tenantSubmitsPaymentReferenceForOwnInvoice() {
+        UUID tenantUserId = UUID.randomUUID();
+        UUID landlordId = UUID.randomUUID();
+        InvoiceResponse pending = invoice(lease());
+        InvoiceResponse submitted = withSubmittedPayment(pending, "591488569305");
+        when(repository.findTenantInvoice(tenantUserId, pending.id()))
+                .thenReturn(Optional.of(pending), Optional.of(submitted));
+        when(repository.paymentUtrExistsForTenant(tenantUserId, "591488569305"))
+                .thenReturn(false);
+        when(repository.submitTenantPayment(
+                tenantUserId, pending.id(), "591488569305"
+        )).thenReturn(1);
+        when(repository.findTenantInvoiceLandlordId(tenantUserId, pending.id()))
+                .thenReturn(Optional.of(landlordId));
+
+        InvoiceResponse result = service.submitTenantPayment(
+                tenantUserId,
+                pending.id(),
+                new VerifyPaymentRequest("591488569305")
+        );
+
+        assertThat(result.submittedPaymentUtr()).isEqualTo("591488569305");
+        assertThat(result.status()).isEqualTo(InvoiceStatus.PENDING);
+        verify(notificationService).paymentSubmitted(landlordId, submitted);
+    }
+
+    @Test
+    void landlordApprovesSubmittedPayment() {
+        UUID landlordId = UUID.randomUUID();
+        InvoiceResponse submitted = withSubmittedPayment(
+                invoice(lease()), "591488569305"
+        );
+        InvoiceResponse paid = new InvoiceResponse(
+                submitted.id(), submitted.invoiceNumber(), submitted.leaseId(),
+                submitted.tenantId(), submitted.tenantName(), submitted.unitId(),
+                submitted.unitNumber(), submitted.propertyId(), submitted.propertyName(),
+                submitted.landlordUpiPayeeName(), submitted.landlordUpiId(),
+                submitted.billingMonth(), submitted.dueDate(), submitted.baseRent(),
+                submitted.previousReading(), submitted.currentReading(),
+                submitted.electricityRate(), submitted.electricityUnits(),
+                submitted.electricityAmount(), submitted.totalAmount(), InvoiceStatus.PAID,
+                submitted.submittedPaymentUtr(), Instant.now(),
+                null, null,
+                submitted.createdAt(), Instant.now()
+        );
+        when(repository.findInvoice(landlordId, submitted.id()))
+                .thenReturn(Optional.of(submitted), Optional.of(paid));
+        when(repository.paymentUtrUsedByOtherInvoice(
+                landlordId, submitted.id(), submitted.submittedPaymentUtr()
+        ))
+                .thenReturn(false);
+        when(repository.approveSubmittedPayment(landlordId, submitted.id()))
+                .thenReturn(1);
+
+        InvoiceResponse result = service.approveSubmittedPayment(
+                landlordId, submitted.id()
+        );
+
+        assertThat(result.status()).isEqualTo(InvoiceStatus.PAID);
+        verify(notificationService).paymentVerified(landlordId, paid);
+    }
+
+    @Test
+    void landlordRejectsSubmittedPaymentAndNotifiesTenant() {
+        UUID landlordId = UUID.randomUUID();
+        InvoiceResponse submitted = withSubmittedPayment(
+                invoice(lease()), "591488569305"
+        );
+        InvoiceResponse pending = new InvoiceResponse(
+                submitted.id(), submitted.invoiceNumber(), submitted.leaseId(),
+                submitted.tenantId(), submitted.tenantName(), submitted.unitId(),
+                submitted.unitNumber(), submitted.propertyId(), submitted.propertyName(),
+                submitted.landlordUpiPayeeName(), submitted.landlordUpiId(),
+                submitted.billingMonth(), submitted.dueDate(), submitted.baseRent(),
+                submitted.previousReading(), submitted.currentReading(),
+                submitted.electricityRate(), submitted.electricityUnits(),
+                submitted.electricityAmount(), submitted.totalAmount(), InvoiceStatus.PENDING,
+                null, null, null, null, submitted.createdAt(), Instant.now()
+        );
+        when(repository.findInvoice(landlordId, submitted.id()))
+                .thenReturn(Optional.of(submitted), Optional.of(pending));
+        when(repository.rejectSubmittedPayment(landlordId, submitted.id()))
+                .thenReturn(1);
+
+        InvoiceResponse result = service.rejectSubmittedPayment(landlordId, submitted.id());
+
+        assertThat(result.submittedPaymentUtr()).isNull();
+        verify(notificationService).paymentRejected(submitted);
     }
 
     private GenerateInvoiceRequest request(UUID leaseId, BigDecimal currentReading) {
         return new GenerateInvoiceRequest(
                 leaseId,
-                "2026-06",
-                LocalDate.of(2026, 6, 5),
+                testMonth().toString(),
+                testMonth().atDay(5),
                 currentReading
         );
     }
@@ -220,8 +319,10 @@ class BillingServiceTest {
                 lease.unitNumber(),
                 lease.propertyId(),
                 lease.propertyName(),
-                "2026-06",
-                LocalDate.of(2026, 6, 5),
+                "Sourabh Mhalim",
+                "mhalimsourabh@okhdfcbank",
+                testMonth().toString(),
+                testMonth().atDay(5),
                 lease.baseRent(),
                 lease.previousReading(),
                 new BigDecimal("132.50"),
@@ -232,8 +333,29 @@ class BillingServiceTest {
                 InvoiceStatus.PENDING,
                 null,
                 null,
+                null,
+                null,
                 Instant.now(),
                 Instant.now()
         );
+    }
+
+    private InvoiceResponse withSubmittedPayment(InvoiceResponse invoice, String utr) {
+        return new InvoiceResponse(
+                invoice.id(), invoice.invoiceNumber(), invoice.leaseId(),
+                invoice.tenantId(), invoice.tenantName(), invoice.unitId(),
+                invoice.unitNumber(), invoice.propertyId(), invoice.propertyName(),
+                invoice.landlordUpiPayeeName(), invoice.landlordUpiId(),
+                invoice.billingMonth(), invoice.dueDate(), invoice.baseRent(),
+                invoice.previousReading(), invoice.currentReading(),
+                invoice.electricityRate(), invoice.electricityUnits(),
+                invoice.electricityAmount(), invoice.totalAmount(), invoice.status(),
+                invoice.paymentUtr(), invoice.paidAt(), utr, Instant.now(),
+                invoice.createdAt(), invoice.updatedAt()
+        );
+    }
+
+    private YearMonth testMonth() {
+        return YearMonth.of(2026, 6);
     }
 }

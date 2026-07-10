@@ -86,6 +86,15 @@ DATABASE_URL=
 
 # Application
 NEXT_PUBLIC_API_URL=http://localhost:8080
+
+# Email notifications (optional)
+EMAIL_NOTIFICATIONS_ENABLED=false
+SMTP_HOST=
+SMTP_PORT=587
+SMTP_USERNAME=
+SMTP_PASSWORD=
+SMTP_FROM=
+SMTP_FROM_NAME=SmartRent
 ```
 
 For the frontend, create `apps/web/.env.local` only when the frontend exists.

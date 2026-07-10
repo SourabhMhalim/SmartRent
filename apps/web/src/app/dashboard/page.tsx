@@ -7,16 +7,19 @@ import {
   CreditCard,
   DoorOpen,
   FileText,
+  IndianRupee,
   Plus,
   UsersRound,
 } from "lucide-react";
 import Link from "next/link";
 import { getSession } from "@/lib/api";
-import { Property, listProperties } from "@/lib/properties-api";
+import { Invoice, listInvoices } from "@/lib/billing-api";
+import { formatCurrency, Property, listProperties } from "@/lib/properties-api";
 
 export default function DashboardPage() {
   const [currentDate, setCurrentDate] = useState("");
   const [properties, setProperties] = useState<Property[]>([]);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [name, setName] = useState("");
@@ -37,7 +40,12 @@ export default function DashboardPage() {
     setLoading(true);
     setLoadError("");
     try {
-      setProperties(await listProperties());
+      const [propertyData, invoiceData] = await Promise.all([
+        listProperties(),
+        listInvoices(),
+      ]);
+      setProperties(propertyData);
+      setInvoices(invoiceData);
     } catch (error) {
       setLoadError(
         error instanceof Error ? error.message : "Unable to load your portfolio.",
@@ -62,6 +70,27 @@ export default function DashboardPage() {
   const occupancy = totals.units
     ? Math.round((totals.occupied / totals.units) * 100)
     : 0;
+  const currentMonth = new Date().toLocaleDateString("en-CA", {
+    year: "numeric",
+    month: "2-digit",
+  });
+  const collectedThisMonth = invoices
+    .filter(
+      (invoice) =>
+        invoice.status === "PAID" && invoice.billingMonth === currentMonth,
+    )
+    .reduce((total, invoice) => total + invoice.totalAmount, 0);
+  const collectedInvoiceCount = invoices.filter(
+    (invoice) =>
+      invoice.status === "PAID" && invoice.billingMonth === currentMonth,
+  ).length;
+  const outstandingInvoices = invoices.filter(
+    (invoice) => invoice.status === "PENDING" || invoice.status === "OVERDUE",
+  );
+  const outstandingAmount = outstandingInvoices.reduce(
+    (total, invoice) => total + invoice.totalAmount,
+    0,
+  );
   const metrics = [
     {
       label: "Properties",
@@ -134,6 +163,47 @@ export default function DashboardPage() {
           </section>
         ) : (
           <>
+            <section className="mt-7 grid gap-4 lg:grid-cols-[1.35fr_1fr]">
+              <article className="overflow-hidden rounded-xl bg-gradient-to-br from-[#0F766E] to-[#115E59] p-6 text-white shadow-sm">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-semibold text-[#CCFBF1]">
+                      Collected this month
+                    </p>
+                    <p className="font-display mt-3 text-3xl font-extrabold md:text-4xl">
+                      {formatCurrency(collectedThisMonth)}
+                    </p>
+                    <p className="mt-3 text-xs text-[#CCFBF1]">
+                      {collectedInvoiceCount}{" "}
+                      {collectedInvoiceCount === 1 ? "invoice" : "invoices"} paid
+                    </p>
+                  </div>
+                  <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-white/15">
+                    <IndianRupee size={22} />
+                  </span>
+                </div>
+              </article>
+              <article className="metric-card">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-sm font-semibold text-[#64748B]">
+                      Outstanding
+                    </p>
+                    <p className="font-display mt-3 text-3xl font-extrabold">
+                      {formatCurrency(outstandingAmount)}
+                    </p>
+                  </div>
+                  <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-[#FFF3D1] text-[#895E00]">
+                    <FileText size={21} />
+                  </span>
+                </div>
+                <p className="mt-3 text-xs text-[#64748B]">
+                  {outstandingInvoices.length} pending or overdue{" "}
+                  {outstandingInvoices.length === 1 ? "invoice" : "invoices"}
+                </p>
+              </article>
+            </section>
+
             <section className="dashboard-grid mt-7" aria-label="Portfolio summary">
               {metrics.map((metric) => (
                 <article className="metric-card" key={metric.label}>
@@ -237,8 +307,8 @@ export default function DashboardPage() {
                   <FileText className="text-[#64748B]" size={20} />
                   <p className="mt-3 text-sm font-bold">Billing activity</p>
                   <p className="mt-1 text-xs leading-5 text-[#64748B]">
-                    Create the current month&apos;s invoice, then open Payments to
-                    share its UPI QR.
+                    Create invoices for the selected billing month, then open
+                    Payments to share the UPI QR.
                   </p>
                   <div className="mt-3 flex flex-wrap gap-3">
                     <Link

@@ -1,6 +1,7 @@
 package com.smartrent.api.auth;
 
 import java.util.Map;
+import java.util.Optional;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import org.springframework.beans.factory.annotation.Value;
@@ -42,7 +43,7 @@ public class SupabaseAuthService {
             );
         }
 
-        return execute(() -> restClient.post()
+        JsonNode response = execute(() -> restClient.post()
                 .uri(uriBuilder -> uriBuilder
                         .path("/signup")
                         .queryParam("redirect_to", "http://localhost:3000/login")
@@ -57,6 +58,97 @@ public class SupabaseAuthService {
                 ))
                 .retrieve()
                 .body(JsonNode.class));
+        String userId = userId(response);
+        if (userId == null) {
+            userId = findAuthUserIdByEmail(request.email()).orElse(null);
+        }
+        if (userId == null) {
+            throw new AuthException(502, "Account was created but profile setup could not finish.");
+        }
+        upsertProfile(userId, request.fullName(), request.phone(), "LANDLORD");
+        return response;
+    }
+
+    public JsonNode registerTenant(AuthController.RegisterRequest request) {
+        if (emailExists(request.email())) {
+            throw new AuthException(
+                    409,
+                    "An account already exists for this email. Sign in or reset your password.",
+                    "account_exists"
+            );
+        }
+        int matchingTenants = countPendingTenantsByEmail(request.email());
+        if (matchingTenants == 0) {
+            throw new AuthException(
+                    404,
+                    "No tenant invitation was found for this email.",
+                    "tenant_invitation_not_found"
+            );
+        }
+        if (matchingTenants > 1) {
+            throw new AuthException(
+                    409,
+                    "This email is linked to more than one tenant record. Ask your property owner to use a unique email.",
+                    "tenant_invitation_ambiguous"
+            );
+        }
+
+        JsonNode response = execute(() -> restClient.post()
+                .uri(uriBuilder -> uriBuilder
+                        .path("/signup")
+                        .queryParam("redirect_to", "http://localhost:3000/login")
+                        .build())
+                .body(Map.of(
+                        "email", request.email(),
+                        "password", request.password(),
+                        "data", Map.of(
+                                "full_name", request.fullName(),
+                                "phone", request.phone()
+                        )
+                ))
+                .retrieve()
+                .body(JsonNode.class));
+
+        String userId = userId(response);
+        if (userId == null) {
+            userId = findAuthUserIdByEmail(request.email()).orElse(null);
+        }
+        if (userId == null) {
+            throw new AuthException(502, "Tenant account was created but could not be linked.");
+        }
+
+        upsertProfile(userId, request.fullName(), request.phone(), "TENANT");
+        int linked = jdbcTemplate.update("""
+                update tenants
+                set tenant_user_id = ?, updated_at = now()
+                where lower(email) = lower(?)
+                  and tenant_user_id is null
+                  and archived_at is null
+                """, java.util.UUID.fromString(userId), request.email());
+        if (linked != 1) {
+            throw new AuthException(409, "Tenant account could not be linked to an invitation.");
+        }
+
+        return response;
+    }
+
+    private String userId(JsonNode response) {
+        String userId = response == null || response.path("user").path("id").isMissingNode()
+                ? null
+                : response.path("user").path("id").asText();
+        return userId == null || userId.isBlank() ? null : userId;
+    }
+
+    private void upsertProfile(String userId, String fullName, String phone, String role) {
+        jdbcTemplate.update("""
+                insert into profiles (id, full_name, phone, role)
+                values (?::uuid, ?, ?, ?)
+                on conflict (id) do update
+                set full_name = excluded.full_name,
+                    phone = excluded.phone,
+                    role = excluded.role,
+                    updated_at = now()
+                """, userId, fullName, phone, role);
     }
 
     private boolean emailExists(String email) {
@@ -66,6 +158,30 @@ public class SupabaseAuthService {
                 email
         );
         return count != null && count > 0;
+    }
+
+    private Optional<String> findAuthUserIdByEmail(String email) {
+        return jdbcTemplate.query("""
+                        select id::text
+                        from auth.users
+                        where lower(email) = lower(?)
+                        order by created_at desc
+                        limit 1
+                        """,
+                (resultSet, rowNumber) -> resultSet.getString("id"),
+                email
+        ).stream().findFirst();
+    }
+
+    private int countPendingTenantsByEmail(String email) {
+        Integer count = jdbcTemplate.queryForObject("""
+                select count(*)
+                from tenants
+                where lower(email) = lower(?)
+                  and tenant_user_id is null
+                  and archived_at is null
+                """, Integer.class, email);
+        return count == null ? 0 : count;
     }
 
     public JsonNode login(AuthController.LoginRequest request) {

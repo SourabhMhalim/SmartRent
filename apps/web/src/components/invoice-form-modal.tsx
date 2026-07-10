@@ -159,7 +159,7 @@ export function InvoiceFormModal({
                     className="mt-1.5 block text-xs text-[#64748B]"
                     id="billing-month-help"
                   >
-                    Invoices can only be generated for the current month.
+                    Use YYYY-MM for the billing month, such as 2026-06.
                   </span>
                 </label>
                 <label>

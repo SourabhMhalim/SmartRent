@@ -4,13 +4,14 @@ import Link from "next/link";
 type BrandProps = {
   dark?: boolean;
   compact?: boolean;
+  href?: string;
 };
 
-export function Brand({ dark = false, compact = false }: BrandProps) {
+export function Brand({ dark = false, compact = false, href = "/dashboard" }: BrandProps) {
   return (
     <Link
       className={`inline-flex items-center gap-2.5 ${dark ? "text-white" : "text-[#0F172A]"}`}
-      href="/dashboard"
+      href={href}
     >
       <span className={`grid h-10 w-12 shrink-0 place-items-center rounded-md ${dark ? "bg-white/10" : "bg-[#E6FFFB]"}`}>
         <Image

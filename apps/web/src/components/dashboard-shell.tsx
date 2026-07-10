@@ -3,6 +3,12 @@
 import { Brand } from "@/components/brand";
 import { AuthSession, clearSession } from "@/lib/api";
 import {
+  listNotifications,
+  markAllNotificationsRead,
+  markNotificationRead,
+  NotificationItem,
+} from "@/lib/notifications-api";
+import {
   Bell,
   Building2,
   ChevronDown,
@@ -31,27 +37,6 @@ const navigation = [
   { label: "Maintenance", icon: Wrench, href: "#" },
 ];
 
-const notifications = [
-  {
-    title: "Rent due in 3 days",
-    detail: "Aarav Mehta · Unit 204",
-    time: "12 min",
-    color: "#e9b949",
-  },
-  {
-    title: "Payment marked received",
-    detail: "₹18,500 from Neha Shah",
-    time: "2 hr",
-    color: "#14B8A6",
-  },
-  {
-    title: "New maintenance request",
-    detail: "Water leakage · Unit 101",
-    time: "Yesterday",
-    color: "#e86d53",
-  },
-];
-
 export function DashboardShell({
   children,
   session,
@@ -64,7 +49,10 @@ export function DashboardShell({
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const fullName = session.user.user_metadata?.full_name ?? "Landlord";
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [notificationError, setNotificationError] = useState("");
+  const fullName = session.user.user_metadata?.full_name ?? "Property Owner";
   const initials = fullName
     .split(/\s+/)
     .filter(Boolean)
@@ -77,12 +65,67 @@ export function DashboardShell({
     router.replace("/login");
   }
 
+  async function loadNotifications() {
+    try {
+      const summary = await listNotifications();
+      setNotifications(summary.notifications);
+      setUnreadCount(summary.unreadCount);
+      setNotificationError("");
+    } catch (error) {
+      setNotificationError(
+        error instanceof Error ? error.message : "Unable to load notifications.",
+      );
+    }
+  }
+
+  async function handleNotificationClick(notification: NotificationItem) {
+    if (!notification.readAt) {
+      try {
+        await markNotificationRead(notification.id);
+        setNotifications((items) =>
+          items.map((item) =>
+            item.id === notification.id
+              ? { ...item, readAt: new Date().toISOString() }
+              : item,
+          ),
+        );
+        setUnreadCount((count) => Math.max(0, count - 1));
+      } catch (error) {
+        setNotificationError(
+          error instanceof Error ? error.message : "Unable to update notification.",
+        );
+        return;
+      }
+    }
+    if (notification.actionHref) {
+      setNotificationsOpen(false);
+      router.push(notification.actionHref);
+    }
+  }
+
+  async function handleMarkAllRead() {
+    try {
+      const summary = await markAllNotificationsRead();
+      setNotifications(summary.notifications);
+      setUnreadCount(summary.unreadCount);
+      setNotificationError("");
+    } catch (error) {
+      setNotificationError(
+        error instanceof Error ? error.message : "Unable to update notifications.",
+      );
+    }
+  }
+
   useEffect(() => {
     document.body.style.overflow = sidebarOpen ? "hidden" : "";
     return () => {
       document.body.style.overflow = "";
     };
   }, [sidebarOpen]);
+
+  useEffect(() => {
+    loadNotifications();
+  }, []);
 
   return (
     <div className="app-shell">
@@ -114,30 +157,28 @@ export function DashboardShell({
               Workspace
             </p>
             <ul className="space-y-1">
-              {navigation.map((item) => (
-                <li key={item.label}>
-                  {(() => {
-                    const active =
-                      item.href === "/dashboard"
-                        ? pathname === "/dashboard"
-                        : item.href !== "#" && pathname.startsWith(item.href);
-                    return (
-                  <Link
-                    className={`flex h-11 items-center gap-3 rounded-md px-3 text-sm font-semibold transition ${
-                      active
-                        ? "bg-white text-[#0F766E]"
-                        : "text-white/72 hover:bg-white/10 hover:text-white"
-                    }`}
-                    href={item.href}
-                    onClick={() => setSidebarOpen(false)}
-                  >
-                    <item.icon size={19} strokeWidth={2} />
-                    {item.label}
-                  </Link>
-                    );
-                  })()}
-                </li>
-              ))}
+              {navigation.map((item) => {
+                const active =
+                  item.href === "/dashboard"
+                    ? pathname === "/dashboard"
+                    : item.href !== "#" && pathname.startsWith(item.href);
+                return (
+                  <li key={item.label}>
+                    <Link
+                      className={`flex h-11 items-center gap-3 rounded-md px-3 text-sm font-semibold transition ${
+                        active
+                          ? "bg-white text-[#0F766E]"
+                          : "text-white/72 hover:bg-white/10 hover:text-white"
+                      }`}
+                      href={item.href}
+                      onClick={() => setSidebarOpen(false)}
+                    >
+                      <item.icon size={19} strokeWidth={2} />
+                      {item.label}
+                    </Link>
+                  </li>
+                );
+              })}
             </ul>
           </nav>
 
@@ -174,11 +215,11 @@ export function DashboardShell({
                     ? "Occupancy"
                     : pathname.startsWith("/dashboard/invoices")
                       ? "Billing"
-                    : pathname.startsWith("/dashboard/payments")
-                      ? "Collections"
-                    : pathname.startsWith("/dashboard/profile")
-                      ? "Account"
-                    : "Overview"}
+                      : pathname.startsWith("/dashboard/payments")
+                        ? "Collections"
+                        : pathname.startsWith("/dashboard/profile")
+                          ? "Account"
+                          : "Overview"}
               </p>
               <h1 className="font-display truncate text-lg font-extrabold tracking-normal">
                 {pathname.startsWith("/dashboard/properties")
@@ -187,11 +228,11 @@ export function DashboardShell({
                     ? "Tenant management"
                     : pathname.startsWith("/dashboard/invoices")
                       ? "Invoice management"
-                    : pathname.startsWith("/dashboard/payments")
-                      ? "Payment management"
-                    : pathname.startsWith("/dashboard/profile")
-                      ? "Landlord profile"
-                    : "Landlord dashboard"}
+                      : pathname.startsWith("/dashboard/payments")
+                        ? "Payment management"
+                        : pathname.startsWith("/dashboard/profile")
+                          ? "Property Owner profile"
+                          : "Property Owner dashboard"}
               </h1>
             </div>
           </div>
@@ -205,12 +246,15 @@ export function DashboardShell({
                 onClick={() => {
                   setNotificationsOpen((value) => !value);
                   setProfileOpen(false);
+                  loadNotifications();
                 }}
                 title="Notifications"
                 type="button"
               >
                 <Bell size={20} />
-                <span className="absolute right-2 top-2 size-2 rounded-full border-2 border-white bg-[#e86d53]" />
+                {unreadCount > 0 ? (
+                  <span className="absolute right-2 top-2 size-2 rounded-full border-2 border-white bg-[#e86d53]" />
+                ) : null}
               </button>
 
               {notificationsOpen ? (
@@ -218,44 +262,59 @@ export function DashboardShell({
                   <div className="flex items-center justify-between border-b border-[#E2E8F0] px-4 py-3">
                     <div>
                       <p className="font-display font-extrabold">Notifications</p>
-                      <p className="mt-0.5 text-xs text-[#64748B]">3 unread updates</p>
+                      <p className="mt-0.5 text-xs text-[#64748B]">
+                        {unreadCount === 1
+                          ? "1 unread update"
+                          : `${unreadCount} unread updates`}
+                      </p>
                     </div>
                     <button
-                      className="text-xs font-bold text-[#0F766E] hover:underline"
+                      className="text-xs font-bold text-[#0F766E] hover:underline disabled:text-[#94A3B8] disabled:no-underline"
+                      disabled={unreadCount === 0}
+                      onClick={handleMarkAllRead}
                       type="button"
                     >
                       Mark all read
                     </button>
                   </div>
-                  <div>
+                  {notificationError ? (
+                    <p className="border-b border-[#E2E8F0] px-4 py-3 text-xs font-semibold text-[#b34e3b]">
+                      {notificationError}
+                    </p>
+                  ) : null}
+                  <div className="max-h-[360px] overflow-y-auto">
+                    {notifications.length === 0 ? (
+                      <p className="px-4 py-6 text-sm font-semibold text-[#64748B]">
+                        No notifications yet.
+                      </p>
+                    ) : null}
                     {notifications.map((item) => (
                       <button
                         className="flex w-full gap-3 border-b border-[#E2E8F0] px-4 py-4 text-left hover:bg-[#F8FAFC]"
-                        key={item.title}
+                        key={item.id}
+                        onClick={() => handleNotificationClick(item)}
                         type="button"
                       >
                         <span
                           className="mt-1.5 size-2 shrink-0 rounded-full"
-                          style={{ backgroundColor: item.color }}
+                          style={{
+                            backgroundColor: item.readAt
+                              ? "#CBD5E1"
+                              : notificationColor(item.notificationType),
+                          }}
                         />
                         <span className="min-w-0 flex-1">
                           <span className="block text-sm font-bold">{item.title}</span>
                           <span className="mt-1 block truncate text-xs text-[#64748B]">
-                            {item.detail}
+                            {item.message}
                           </span>
                         </span>
                         <span className="shrink-0 text-[11px] text-[#94A3B8]">
-                          {item.time}
+                          {formatNotificationTime(item.createdAt)}
                         </span>
                       </button>
                     ))}
                   </div>
-                  <button
-                    className="w-full px-4 py-3 text-sm font-bold text-[#0F766E] hover:bg-[#F8FAFC]"
-                    type="button"
-                  >
-                    View all notifications
-                  </button>
                 </div>
               ) : null}
             </div>
@@ -275,7 +334,7 @@ export function DashboardShell({
                 </span>
                 <span className="mobile-hide text-left">
                   <span className="block text-sm font-bold">{fullName}</span>
-                  <span className="block text-xs text-[#64748B]">Landlord</span>
+                  <span className="block text-xs text-[#64748B]">Property Owner</span>
                 </span>
                 <ChevronDown className="mobile-hide text-[#64748B]" size={16} />
               </button>
@@ -285,7 +344,7 @@ export function DashboardShell({
                   <div className="border-b border-[#E2E8F0] px-4 py-4">
                     <p className="text-sm font-bold">{fullName}</p>
                     <p className="mt-1 truncate text-xs text-[#64748B]">
-                      {session.user.email ?? session.user.phone ?? "Landlord account"}
+                      {session.user.email ?? session.user.phone ?? "Property Owner account"}
                     </p>
                   </div>
                   <div className="p-2">
@@ -324,4 +383,41 @@ export function DashboardShell({
       </div>
     </div>
   );
+}
+
+function notificationColor(type: NotificationItem["notificationType"]) {
+  if (type === "PAYMENT_VERIFIED") {
+    return "#14B8A6";
+  }
+  if (type === "PAYMENT_SUBMITTED") {
+    return "#3B82F6";
+  }
+  if (type === "PAYMENT_REJECTED") {
+    return "#e86d53";
+  }
+  if (type === "INVOICE_OVERDUE") {
+    return "#e86d53";
+  }
+  if (type === "RENT_DUE_SOON") {
+    return "#e9b949";
+  }
+  return "#0F766E";
+}
+
+function formatNotificationTime(createdAt: string) {
+  const created = new Date(createdAt).getTime();
+  const elapsedMs = Date.now() - created;
+  const minutes = Math.max(0, Math.floor(elapsedMs / 60000));
+  if (minutes < 1) {
+    return "Now";
+  }
+  if (minutes < 60) {
+    return `${minutes} min`;
+  }
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) {
+    return `${hours} hr`;
+  }
+  const days = Math.floor(hours / 24);
+  return days === 1 ? "Yesterday" : `${days} days`;
 }

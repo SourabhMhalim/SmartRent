@@ -28,7 +28,7 @@ public final class ProfileModels {
 
             @Pattern(
                     regexp = "^$|^[A-Za-z0-9._-]{2,256}@[A-Za-z0-9.-]{2,63}$",
-                    message = "UPI ID must use a valid format such as landlord@bank."
+                    message = "UPI ID must use a valid format such as owner@bank."
             )
             @Size(max = 320, message = "UPI ID must not exceed 320 characters.")
             String upiId

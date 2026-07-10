@@ -36,6 +36,6 @@ public class ProfileService {
     }
 
     private DomainException profileNotFound() {
-        return new DomainException(404, "Landlord profile was not found.", "profile_not_found");
+        return new DomainException(404, "Property owner profile was not found.", "profile_not_found");
     }
 }

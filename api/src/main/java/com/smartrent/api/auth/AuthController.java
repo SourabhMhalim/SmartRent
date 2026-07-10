@@ -28,6 +28,11 @@ public class AuthController {
         return ResponseEntity.ok(authService.register(request));
     }
 
+    @PostMapping("/register-tenant")
+    public ResponseEntity<Object> registerTenant(@Valid @RequestBody RegisterRequest request) {
+        return ResponseEntity.ok(authService.registerTenant(request));
+    }
+
     @PostMapping("/login")
     public ResponseEntity<Object> login(@Valid @RequestBody LoginRequest request) {
         return ResponseEntity.ok(authService.login(request));

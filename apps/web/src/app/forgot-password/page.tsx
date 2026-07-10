@@ -56,7 +56,7 @@ export default function ForgotPasswordPage() {
           Forgot your password?
         </h1>
         <p className="mt-3 text-sm leading-6 text-[#64748B]">
-          Enter the email associated with your landlord account. We will send
+          Enter the email associated with your property owner account. We will send
           you a password reset link.
         </p>
 

@@ -4,6 +4,7 @@ import java.net.URI;
 import java.util.List;
 import java.util.UUID;
 
+import com.smartrent.api.auth.AuthorizationService;
 import com.smartrent.api.tenant.TenantModels.AvailableUnitResponse;
 import com.smartrent.api.tenant.TenantModels.EndLeaseRequest;
 import com.smartrent.api.tenant.TenantModels.LeaseRequest;
@@ -28,9 +29,11 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api")
 public class TenantController {
 
+    private final AuthorizationService authorizationService;
     private final TenantService service;
 
-    public TenantController(TenantService service) {
+    public TenantController(AuthorizationService authorizationService, TenantService service) {
+        this.authorizationService = authorizationService;
         this.service = service;
     }
 
@@ -105,6 +108,6 @@ public class TenantController {
     }
 
     private UUID landlordId(Jwt jwt) {
-        return UUID.fromString(jwt.getSubject());
+        return authorizationService.requireLandlordWorkspace(jwt);
     }
 }

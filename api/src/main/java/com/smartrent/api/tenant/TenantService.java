@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.UUID;
 
 import com.smartrent.api.common.DomainException;
+import com.smartrent.api.billing.BillingModels.InvoiceResponse;
 import com.smartrent.api.tenant.TenantModels.AvailableUnitResponse;
 import com.smartrent.api.tenant.TenantModels.EndLeaseRequest;
 import com.smartrent.api.tenant.TenantModels.LeaseRequest;
@@ -35,6 +36,16 @@ public class TenantService {
     public TenantResponse getTenant(UUID landlordId, UUID tenantId) {
         return repository.findTenant(landlordId, tenantId)
                 .orElseThrow(() -> notFound("Tenant"));
+    }
+
+    public TenantResponse getTenantByUserId(UUID tenantUserId) {
+        return repository.findTenantByUserId(tenantUserId)
+                .orElseThrow(() -> notFound("Tenant"));
+    }
+
+    public List<InvoiceResponse> listTenantInvoices(UUID tenantUserId) {
+        getTenantByUserId(tenantUserId);
+        return repository.findInvoicesByTenantUserId(tenantUserId);
     }
 
     @Transactional

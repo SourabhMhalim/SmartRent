@@ -353,7 +353,7 @@ export default function TenantDetailsPage() {
               <div className="rounded-lg bg-[#F8FAFC] p-4">
                 <ShieldCheck className="text-[#0F766E]" size={19} />
                 <p className="mt-2 text-xs leading-5 text-[#64748B]">
-                  This tenant and every lease are scoped to your landlord account.
+                  This tenant and every lease are scoped to your property owner account.
                 </p>
               </div>
             </div>

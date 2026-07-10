@@ -1,13 +1,17 @@
 "use client";
 
 import { DashboardBackLink } from "@/components/dashboard-back-link";
+import { UpiQrCode } from "@/components/upi-qr-code";
 import {
+  approveInvoicePayment,
   Invoice,
   listInvoices,
+  rejectInvoicePayment,
   verifyInvoicePayment,
 } from "@/lib/billing-api";
 import { getLandlordProfile, LandlordProfile } from "@/lib/profile-api";
 import { formatCurrency } from "@/lib/properties-api";
+import { buildUpiUri } from "@/lib/upi";
 import {
   BadgeCheck,
   CheckCircle2,
@@ -22,7 +26,6 @@ import {
   WalletCards,
 } from "lucide-react";
 import Link from "next/link";
-import QRCode from "qrcode";
 import { FormEvent, useEffect, useRef, useState } from "react";
 
 export default function PaymentsPage() {
@@ -41,6 +44,12 @@ export default function PaymentsPage() {
         .includes(search.toLowerCase()),
   );
   const verifiedInvoices = invoices.filter((invoice) => invoice.status === "PAID");
+  const awaitingVerificationInvoices = invoices.filter(
+    (invoice) =>
+      invoice.status !== "PAID" &&
+      invoice.status !== "CANCELLED" &&
+      Boolean(invoice.submittedPaymentUtr),
+  );
   const collectedAmount = verifiedInvoices.reduce(
     (total, invoice) => total + invoice.totalAmount,
     0,
@@ -90,7 +99,7 @@ export default function PaymentsPage() {
               Payments
             </h2>
             <p className="mt-2 max-w-2xl text-sm text-[#64748B]">
-              Collect invoice payments through the landlord&apos;s saved UPI details
+              Collect invoice payments through the property owner&apos;s saved UPI details
               and verify submitted transaction references.
             </p>
           </div>
@@ -144,12 +153,12 @@ export default function PaymentsPage() {
                     <h3 className="font-display text-lg font-extrabold">
                       {configured
                         ? "UPI collection is configured"
-                        : "Add UPI details to the landlord profile"}
+                        : "Add UPI details to the property owner profile"}
                     </h3>
                     <p className="mt-2 max-w-2xl text-sm leading-6 text-[#64748B]">
                       {configured
                         ? `${profile?.upiPayeeName} · ${profile?.upiId}. Invoice QR codes will use these saved profile details.`
-                        : "The payee name and UPI ID are managed in the landlord profile and used for every invoice payment QR."}
+                        : "The payee name and UPI ID are managed in the property owner profile and used for every invoice payment QR."}
                     </p>
                   </div>
                 </div>
@@ -173,7 +182,7 @@ export default function PaymentsPage() {
                 icon={Clock3}
                 label="Awaiting verification"
                 note="UTR submitted by tenant"
-                value="0"
+                value={String(awaitingVerificationInvoices.length)}
               />
               <PaymentMetric
                 icon={CheckCircle2}
@@ -260,7 +269,7 @@ export default function PaymentsPage() {
                 <div className="border-b border-[#E2E8F0] bg-[#F8FAFC] px-5 py-4">
                   <h3 className="font-display font-extrabold">Verified payments</h3>
                   <p className="mt-1 text-xs text-[#64748B]">
-                    Manually confirmed by the landlord against a UPI transaction ID.
+                    Manually confirmed by the property owner against a UPI transaction ID.
                   </p>
                 </div>
                 <div className="divide-y divide-[#E2E8F0]">
@@ -308,6 +317,7 @@ function InvoicePaymentCard({
   const [utr, setUtr] = useState("");
   const [verifying, setVerifying] = useState(false);
   const [verificationError, setVerificationError] = useState("");
+  const [reviewing, setReviewing] = useState(false);
 
   function selectPaymentLink() {
     paymentLinkRef.current?.focus();
@@ -329,6 +339,26 @@ function InvoicePaymentCard({
       );
     } finally {
       setVerifying(false);
+    }
+  }
+
+  async function reviewPayment(action: "approve" | "reject") {
+    setVerificationError("");
+    setReviewing(true);
+    try {
+      onVerified(
+        action === "approve"
+          ? await approveInvoicePayment(invoice.id)
+          : await rejectInvoicePayment(invoice.id),
+      );
+    } catch (reviewError) {
+      setVerificationError(
+        reviewError instanceof Error
+          ? reviewError.message
+          : "Unable to review this payment.",
+      );
+    } finally {
+      setReviewing(false);
     }
   }
 
@@ -396,6 +426,37 @@ function InvoicePaymentCard({
             ref={paymentLinkRef}
             value={paymentUri}
           />
+          {invoice.submittedPaymentUtr ? (
+            <div className="mt-4 rounded-lg border border-[#F5D58B] bg-[#FFFBEB] p-4">
+              <p className="text-xs font-bold uppercase tracking-wide text-[#895E00]">
+                Tenant submitted a payment
+              </p>
+              <p className="mt-2 text-sm font-bold">
+                UTR {invoice.submittedPaymentUtr}
+              </p>
+              <p className="mt-1 text-xs text-[#64748B]">
+                Confirm this reference in your UPI statement before approving.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  className="primary-button"
+                  disabled={reviewing}
+                  onClick={() => void reviewPayment("approve")}
+                  type="button"
+                >
+                  {reviewing ? "Reviewing..." : "Approve payment"}
+                </button>
+                <button
+                  className="min-h-11 rounded-md border border-[#CBD5E1] bg-white px-4 text-xs font-bold"
+                  disabled={reviewing}
+                  onClick={() => void reviewPayment("reject")}
+                  type="button"
+                >
+                  Reject
+                </button>
+              </div>
+            </div>
+          ) : (
           <form className="mt-4" onSubmit={verifyPayment}>
             <label>
               <span className="mb-2 block text-xs font-bold uppercase tracking-wide text-[#64748B]">
@@ -430,50 +491,21 @@ function InvoicePaymentCard({
               </p>
             ) : null}
           </form>
+          )}
+          {verificationError && invoice.submittedPaymentUtr ? (
+            <p className="mt-2 text-xs font-semibold text-[#A34231]" role="alert">
+              {verificationError}
+            </p>
+          ) : null}
         </div>
       </div>
       <div className="border-t border-[#E2E8F0] bg-[#F8FAFC] px-5 py-3">
         <p className="text-xs text-[#64748B]">
           Scan in a UPI app. Payment confirmation still requires the tenant&apos;s
-          UTR and landlord verification.
+          UTR and property owner verification.
         </p>
       </div>
     </article>
-  );
-}
-
-function UpiQrCode({
-  paymentUri,
-  label,
-}: {
-  paymentUri: string;
-  label: string;
-}) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-
-  useEffect(() => {
-    if (!canvasRef.current) {
-      return;
-    }
-    void QRCode.toCanvas(canvasRef.current, paymentUri, {
-      width: 176,
-      margin: 2,
-      errorCorrectionLevel: "M",
-      color: {
-        dark: "#0F172A",
-        light: "#FFFFFF",
-      },
-    });
-  }, [paymentUri]);
-
-  return (
-    <div
-      className="mx-auto rounded-xl border border-[#D7E0E8] bg-white p-2 shadow-sm"
-      data-payment-uri={paymentUri}
-      data-testid="upi-qr"
-    >
-      <canvas aria-label={label} ref={canvasRef} role="img" />
-    </div>
   );
 }
 
@@ -484,18 +516,6 @@ function PaymentDetail({ label, value }: { label: string; value: string }) {
       <dd className="break-all text-right font-bold">{value}</dd>
     </div>
   );
-}
-
-function buildUpiUri(invoice: Invoice, profile: LandlordProfile) {
-  const parameters = new URLSearchParams({
-    pa: profile.upiId ?? "",
-    pn: profile.upiPayeeName ?? "",
-    am: invoice.totalAmount.toFixed(2),
-    cu: "INR",
-    tr: invoice.invoiceNumber,
-    tn: `SmartRent ${invoice.invoiceNumber}`,
-  });
-  return `upi://pay?${parameters.toString()}`;
 }
 
 function PaymentMetric({
@@ -538,7 +558,7 @@ function PaymentEmptyState({ configured }: { configured: boolean }) {
         <p className="mt-3 text-sm leading-6 text-[#64748B]">
           {configured
             ? "Payment records will appear here after a tenant pays an invoice and submits the UPI transaction reference."
-            : "Save the landlord's UPI details in Profile first. SmartRent can then create amount-specific payment QR codes for invoices."}
+            : "Save the property owner's UPI details in Profile first. SmartRent can then create amount-specific payment QR codes for invoices."}
         </p>
         {!configured ? (
           <Link className="primary-button mt-7" href="/dashboard/profile">
