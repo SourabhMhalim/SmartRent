@@ -22,6 +22,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class BillingService {
 
+    private static final int MAX_INVOICES_CREATED_PER_MONTH = 100;
+
     private final BillingRepository repository;
     private final NotificationService notificationService;
 
@@ -59,8 +61,8 @@ public class BillingService {
                 ));
     }
 
-    public PublicInvoicePaymentResponse getPublicInvoicePayment(UUID invoiceId) {
-        InvoiceResponse invoice = repository.findPublicInvoice(invoiceId)
+    public PublicInvoicePaymentResponse getPublicInvoicePayment(String publicPaymentToken) {
+        InvoiceResponse invoice = repository.findPublicInvoice(publicPaymentToken)
                 .orElseThrow(() -> new DomainException(
                         404,
                         "Invoice was not found.",
@@ -207,6 +209,14 @@ public class BillingService {
             UUID landlordId,
             GenerateInvoiceRequest request
     ) {
+        if (repository.countInvoicesCreatedThisMonth(landlordId)
+                >= MAX_INVOICES_CREATED_PER_MONTH) {
+            throw new DomainException(
+                    409,
+                    "This portfolio version supports up to 100 invoices per landlord each month.",
+                    "invoice_monthly_limit_reached"
+            );
+        }
         BillableLeaseResponse lease = repository
                 .findBillableLease(landlordId, request.leaseId())
                 .orElseThrow(() -> new DomainException(

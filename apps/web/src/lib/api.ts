@@ -96,16 +96,13 @@ export function getCurrentUser() {
   return authenticatedApiRequest<CurrentUser>("/api/me");
 }
 
-export function storeSession(session: AuthSession, remember: boolean) {
+export function storeSession(session: AuthSession) {
   clearSession();
-  const storage = remember ? localStorage : sessionStorage;
-  storage.setItem("smartrent_session", JSON.stringify(session));
+  sessionStorage.setItem("smartrent_session", JSON.stringify(session));
 }
 
 export function getSession(): AuthSession | null {
-  const stored =
-    localStorage.getItem("smartrent_session") ??
-    sessionStorage.getItem("smartrent_session");
+  const stored = sessionStorage.getItem("smartrent_session");
 
   if (!stored) {
     return null;
@@ -128,7 +125,6 @@ export function getSession(): AuthSession | null {
 }
 
 export function clearSession() {
-  localStorage.removeItem("smartrent_session");
   sessionStorage.removeItem("smartrent_session");
 }
 

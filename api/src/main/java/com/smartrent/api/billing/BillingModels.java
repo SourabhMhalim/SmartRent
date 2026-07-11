@@ -98,6 +98,7 @@ public final class BillingModels {
             Instant paidAt,
             String submittedPaymentUtr,
             Instant paymentSubmittedAt,
+            String publicPaymentToken,
             Instant createdAt,
             Instant updatedAt
     ) {

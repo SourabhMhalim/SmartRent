@@ -18,15 +18,18 @@ public class SupabaseAuthService {
     private final RestClient restClient;
     private final String publishableKey;
     private final JdbcTemplate jdbcTemplate;
+    private final String appBaseUrl;
 
     public SupabaseAuthService(
             RestClient.Builder restClientBuilder,
             JdbcTemplate jdbcTemplate,
             @Value("${supabase.url}") String supabaseUrl,
-            @Value("${supabase.publishable-key}") String publishableKey
+            @Value("${supabase.publishable-key}") String publishableKey,
+            @Value("${smartrent.app.base-url:http://localhost:3000}") String appBaseUrl
     ) {
         this.jdbcTemplate = jdbcTemplate;
         this.publishableKey = publishableKey;
+        this.appBaseUrl = cleanBaseUrl(appBaseUrl);
         this.restClient = restClientBuilder
                 .baseUrl(supabaseUrl + "/auth/v1")
                 .defaultHeader("apikey", publishableKey)
@@ -46,7 +49,7 @@ public class SupabaseAuthService {
         JsonNode response = execute(() -> restClient.post()
                 .uri(uriBuilder -> uriBuilder
                         .path("/signup")
-                        .queryParam("redirect_to", "http://localhost:3000/login")
+                        .queryParam("redirect_to", appBaseUrl + "/login")
                         .build())
                 .body(Map.of(
                         "email", request.email(),
@@ -96,7 +99,7 @@ public class SupabaseAuthService {
         JsonNode response = execute(() -> restClient.post()
                 .uri(uriBuilder -> uriBuilder
                         .path("/signup")
-                        .queryParam("redirect_to", "http://localhost:3000/login")
+                        .queryParam("redirect_to", appBaseUrl + "/login")
                         .build())
                 .body(Map.of(
                         "email", request.email(),
@@ -199,7 +202,7 @@ public class SupabaseAuthService {
         execute(() -> restClient.post()
                 .uri(uriBuilder -> uriBuilder
                         .path("/recover")
-                        .queryParam("redirect_to", "http://localhost:3000/reset-password")
+                        .queryParam("redirect_to", appBaseUrl + "/reset-password")
                         .build())
                 .body(Map.of("email", request.email()))
                 .retrieve()
@@ -293,5 +296,11 @@ public class SupabaseAuthService {
     @FunctionalInterface
     private interface AuthCall<T> {
         T execute();
+    }
+
+    private String cleanBaseUrl(String value) {
+        return value == null || value.isBlank()
+                ? "http://localhost:3000"
+                : value.trim().replaceAll("/+$", "");
     }
 }

@@ -7,9 +7,11 @@ import java.math.RoundingMode;
 import java.sql.Date;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.security.SecureRandom;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.YearMonth;
+import java.util.Base64;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -59,7 +61,8 @@ public class BillingRepository {
                        else i.status
                    end as effective_status,
                    i.payment_utr, i.paid_at, i.payment_submitted_utr,
-                   i.payment_submitted_at, i.created_at, i.updated_at
+                   i.payment_submitted_at, i.public_payment_token,
+                   i.created_at, i.updated_at
             from invoices i
             join leases l on l.id = i.lease_id
             join tenants t on t.id = l.tenant_id
@@ -70,6 +73,7 @@ public class BillingRepository {
             """;
 
     private final JdbcTemplate jdbcTemplate;
+    private final SecureRandom secureRandom = new SecureRandom();
 
     public BillingRepository(JdbcTemplate jdbcTemplate) {
         this.jdbcTemplate = jdbcTemplate;
@@ -100,6 +104,17 @@ public class BillingRepository {
         return count != null && count > 0;
     }
 
+    public int countInvoicesCreatedThisMonth(UUID landlordId) {
+        Integer count = jdbcTemplate.queryForObject("""
+                select count(*)
+                from invoices
+                where landlord_id = ?
+                  and created_at >= date_trunc('month', now())
+                  and created_at < date_trunc('month', now()) + interval '1 month'
+                """, Integer.class, landlordId);
+        return count == null ? 0 : count;
+    }
+
     public InvoiceResponse createInvoice(
             UUID landlordId,
             BillableLeaseResponse lease,
@@ -111,6 +126,7 @@ public class BillingRepository {
     ) {
         UUID readingId = UUID.randomUUID();
         UUID invoiceId = UUID.randomUUID();
+        String publicPaymentToken = publicPaymentToken();
         LocalDate monthStart = billingMonth.atDay(1);
         BigDecimal totalAmount = lease.baseRent()
                 .add(electricityAmount)
@@ -132,11 +148,11 @@ public class BillingRepository {
                 insert into invoices (
                     id, landlord_id, lease_id, meter_reading_id, invoice_number,
                     billing_month, due_date, base_rent, electricity_amount,
-                    total_amount, status
-                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')
+                    total_amount, status, public_payment_token
+                ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PENDING', ?)
                 """, invoiceId, landlordId, lease.leaseId(), readingId, invoiceNumber,
                 Date.valueOf(monthStart), Date.valueOf(dueDate), lease.baseRent(),
-                electricityAmount, totalAmount);
+                electricityAmount, totalAmount, publicPaymentToken);
 
         return findInvoice(landlordId, invoiceId).orElseThrow();
     }
@@ -154,10 +170,10 @@ public class BillingRepository {
                 """, INVOICE_MAPPER, landlordId, invoiceId).stream().findFirst();
     }
 
-    public Optional<InvoiceResponse> findPublicInvoice(UUID invoiceId) {
+    public Optional<InvoiceResponse> findPublicInvoice(String publicPaymentToken) {
         return jdbcTemplate.query(INVOICE_SELECT + """
-                where i.id = ?
-                """, INVOICE_MAPPER, invoiceId).stream().findFirst();
+                where i.public_payment_token = ?
+                """, INVOICE_MAPPER, publicPaymentToken).stream().findFirst();
     }
 
     public boolean paymentUtrExists(UUID landlordId, String utr) {
@@ -300,6 +316,7 @@ public class BillingRepository {
                     instant(resultSet, "paid_at"),
                     resultSet.getString("payment_submitted_utr"),
                     instant(resultSet, "payment_submitted_at"),
+                    resultSet.getString("public_payment_token"),
                     instant(resultSet, "created_at"),
                     instant(resultSet, "updated_at")
             );
@@ -312,5 +329,11 @@ public class BillingRepository {
     private static Instant instant(ResultSet resultSet, String column) throws SQLException {
         var value = resultSet.getTimestamp(column);
         return value == null ? null : value.toInstant();
+    }
+
+    private String publicPaymentToken() {
+        byte[] bytes = new byte[32];
+        secureRandom.nextBytes(bytes);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
     }
 }

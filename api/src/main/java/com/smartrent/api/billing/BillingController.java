@@ -61,11 +61,11 @@ public class BillingController {
         return service.getInvoice(landlordId(jwt), invoiceId);
     }
 
-    @GetMapping("/public/invoices/{invoiceId}/payment")
+    @GetMapping("/public/invoices/{publicPaymentToken}/payment")
     public PublicInvoicePaymentResponse getPublicInvoicePayment(
-            @PathVariable UUID invoiceId
+            @PathVariable String publicPaymentToken
     ) {
-        return service.getPublicInvoicePayment(invoiceId);
+        return service.getPublicInvoicePayment(publicPaymentToken);
     }
 
     @GetMapping("/invoices/{invoiceId}/pdf")

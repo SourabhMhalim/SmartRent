@@ -15,8 +15,8 @@ export type PublicInvoicePayment = {
   submittedPaymentUtr?: string;
 };
 
-export function getPublicInvoicePayment(invoiceId: string) {
+export function getPublicInvoicePayment(publicPaymentToken: string) {
   return apiRequest<PublicInvoicePayment>(
-    `/api/public/invoices/${invoiceId}/payment`,
+    `/api/public/invoices/${publicPaymentToken}/payment`,
   );
 }

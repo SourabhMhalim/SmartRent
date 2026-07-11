@@ -17,6 +17,7 @@ import com.smartrent.api.tenant.TenantModels.EndLeaseRequest;
 import com.smartrent.api.tenant.TenantModels.LeaseRequest;
 import com.smartrent.api.tenant.TenantModels.LeaseResponse;
 import com.smartrent.api.tenant.TenantModels.LeaseStatus;
+import com.smartrent.api.tenant.TenantModels.TenantRequest;
 import com.smartrent.api.tenant.TenantModels.TenantResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -49,6 +50,19 @@ class TenantServiceTest {
                 .hasMessage("A tenant with an active lease cannot be archived.");
 
         verify(repository, never()).archiveTenant(landlordId, tenantId);
+    }
+
+    @Test
+    void rejectsCreatingMoreThanFiveActiveTenants() {
+        UUID landlordId = UUID.randomUUID();
+        TenantRequest request = tenantRequest();
+        when(repository.countActiveTenants(landlordId)).thenReturn(5);
+
+        assertThatThrownBy(() -> service.createTenant(landlordId, request))
+                .isInstanceOf(DomainException.class)
+                .hasMessage("This portfolio version supports up to 5 active tenants per landlord.");
+
+        verify(repository, never()).createTenant(landlordId, request);
     }
 
     @Test
@@ -127,6 +141,19 @@ class TenantServiceTest {
                 LocalDate.now(),
                 new BigDecimal("18500"),
                 new BigDecimal("37000"),
+                null
+        );
+    }
+
+    private TenantRequest tenantRequest() {
+        return new TenantRequest(
+                "Neha Shah",
+                "neha@example.com",
+                "+919876543210",
+                null,
+                null,
+                null,
+                null,
                 null
         );
     }

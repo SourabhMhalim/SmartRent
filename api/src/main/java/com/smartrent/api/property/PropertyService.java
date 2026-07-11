@@ -14,6 +14,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class PropertyService {
 
+    private static final int MAX_ACTIVE_PROPERTIES_PER_LANDLORD = 3;
+    private static final int MAX_ACTIVE_UNITS_PER_PROPERTY = 5;
+
     private final PropertyRepository repository;
 
     public PropertyService(PropertyRepository repository) {
@@ -22,6 +25,13 @@ public class PropertyService {
 
     @Transactional
     public PropertyResponse createProperty(UUID landlordId, PropertyRequest request) {
+        if (repository.countActiveProperties(landlordId) >= MAX_ACTIVE_PROPERTIES_PER_LANDLORD) {
+            throw new DomainException(
+                    409,
+                    "This portfolio version supports up to 3 active properties per landlord.",
+                    "property_limit_reached"
+            );
+        }
         return repository.createProperty(landlordId, request);
     }
 
@@ -65,6 +75,13 @@ public class PropertyService {
             UnitRequest request
     ) {
         getProperty(landlordId, propertyId);
+        if (repository.countActiveUnits(landlordId, propertyId) >= MAX_ACTIVE_UNITS_PER_PROPERTY) {
+            throw new DomainException(
+                    409,
+                    "This portfolio version supports up to 5 active units per property.",
+                    "unit_limit_reached"
+            );
+        }
         ensureUniqueUnitNumber(landlordId, propertyId, request.unitNumber(), null);
         return repository.createUnit(landlordId, propertyId, request);
     }

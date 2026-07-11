@@ -39,6 +39,7 @@ supabase:
 smartrent:
   app:
     base-url: ${SMARTRENT_APP_BASE_URL:http://localhost:3000}
+    allowed-origins: ${SMARTRENT_ALLOWED_ORIGINS:http://localhost:3000}
   email:
     enabled: ${EMAIL_NOTIFICATIONS_ENABLED:false}
     host: ${SMTP_HOST:}

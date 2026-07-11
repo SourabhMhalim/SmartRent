@@ -18,6 +18,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class TenantService {
 
+    private static final int MAX_ACTIVE_TENANTS_PER_LANDLORD = 5;
+
     private final TenantRepository repository;
 
     public TenantService(TenantRepository repository) {
@@ -26,6 +28,13 @@ public class TenantService {
 
     @Transactional
     public TenantResponse createTenant(UUID landlordId, TenantRequest request) {
+        if (repository.countActiveTenants(landlordId) >= MAX_ACTIVE_TENANTS_PER_LANDLORD) {
+            throw new DomainException(
+                    409,
+                    "This portfolio version supports up to 5 active tenants per landlord.",
+                    "tenant_limit_reached"
+            );
+        }
         return repository.createTenant(landlordId, request);
     }
 

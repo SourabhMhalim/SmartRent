@@ -63,6 +63,15 @@ public class TenantRepository {
         return findTenant(landlordId, id).orElseThrow();
     }
 
+    public int countActiveTenants(UUID landlordId) {
+        Integer count = jdbcTemplate.queryForObject("""
+                select count(*)
+                from tenants
+                where landlord_id = ? and archived_at is null
+                """, Integer.class, landlordId);
+        return count == null ? 0 : count;
+    }
+
     public List<TenantResponse> findTenants(UUID landlordId, String search) {
         String normalized = search == null ? "" : search.trim().toLowerCase();
         String pattern = "%" + normalized + "%";

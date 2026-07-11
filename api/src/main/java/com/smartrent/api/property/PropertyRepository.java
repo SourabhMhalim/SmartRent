@@ -50,6 +50,15 @@ public class PropertyRepository {
         return findProperty(landlordId, id).orElseThrow();
     }
 
+    public int countActiveProperties(UUID landlordId) {
+        Integer count = jdbcTemplate.queryForObject("""
+                select count(*)
+                from properties
+                where landlord_id = ? and archived_at is null
+                """, Integer.class, landlordId);
+        return count == null ? 0 : count;
+    }
+
     public List<PropertyResponse> findProperties(UUID landlordId, String search) {
         String query = PROPERTY_SELECT + """
                 where p.landlord_id = ? and p.archived_at is null
@@ -115,6 +124,15 @@ public class PropertyRepository {
                 """, UNIT_MAPPER, propertyId, landlordId, request.unitNumber(), request.floor(),
                 request.baseRent(), request.electricityRate(), request.status().name(),
                 request.notes());
+    }
+
+    public int countActiveUnits(UUID landlordId, UUID propertyId) {
+        Integer count = jdbcTemplate.queryForObject("""
+                select count(*)
+                from units
+                where landlord_id = ? and property_id = ? and archived_at is null
+                """, Integer.class, landlordId, propertyId);
+        return count == null ? 0 : count;
     }
 
     public List<UnitResponse> findUnits(UUID landlordId, UUID propertyId) {

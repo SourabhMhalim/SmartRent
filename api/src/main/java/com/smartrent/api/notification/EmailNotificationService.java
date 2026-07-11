@@ -371,6 +371,6 @@ public class EmailNotificationService {
     }
 
     private String paymentPageUrl(InvoiceResponse invoice) {
-        return appBaseUrl + "/pay/" + encode(invoice.id().toString());
+        return appBaseUrl + "/pay/" + encode(invoice.publicPaymentToken());
     }
 }

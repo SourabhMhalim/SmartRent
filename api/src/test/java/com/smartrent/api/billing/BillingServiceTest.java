@@ -89,6 +89,29 @@ class BillingServiceTest {
     }
 
     @Test
+    void rejectsMoreThanOneHundredInvoicesCreatedPerMonth() {
+        UUID landlordId = UUID.randomUUID();
+        BillableLeaseResponse lease = lease();
+        GenerateInvoiceRequest request = request(lease.leaseId(), new BigDecimal("130"));
+        when(repository.countInvoicesCreatedThisMonth(landlordId)).thenReturn(100);
+
+        assertThatThrownBy(() -> service.generateInvoice(landlordId, request))
+                .isInstanceOf(DomainException.class)
+                .hasMessage("This portfolio version supports up to 100 invoices per landlord each month.");
+
+        verify(repository, never()).findBillableLease(landlordId, lease.leaseId());
+        verify(repository, never()).createInvoice(
+                eq(landlordId),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any()
+        );
+    }
+
+    @Test
     void calculatesElectricityAndTotalUsingBigDecimal() {
         UUID landlordId = UUID.randomUUID();
         BillableLeaseResponse lease = lease();
@@ -171,7 +194,7 @@ class BillingServiceTest {
                 pending.electricityRate(), pending.electricityUnits(),
                 pending.electricityAmount(), pending.totalAmount(), InvoiceStatus.PAID,
                 "591488569305", Instant.now(), null, null,
-                pending.createdAt(), Instant.now()
+                pending.publicPaymentToken(), pending.createdAt(), Instant.now()
         );
         when(repository.findInvoice(landlordId, pending.id()))
                 .thenReturn(Optional.of(pending), Optional.of(paid));
@@ -219,6 +242,19 @@ class BillingServiceTest {
     }
 
     @Test
+    void publicPaymentLookupUsesToken() {
+        InvoiceResponse invoice = invoice(lease());
+        when(repository.findPublicInvoice(invoice.publicPaymentToken()))
+                .thenReturn(Optional.of(invoice));
+
+        var result = service.getPublicInvoicePayment(invoice.publicPaymentToken());
+
+        assertThat(result.id()).isEqualTo(invoice.id());
+        assertThat(result.invoiceNumber()).isEqualTo(invoice.invoiceNumber());
+        verify(repository).findPublicInvoice(invoice.publicPaymentToken());
+    }
+
+    @Test
     void landlordApprovesSubmittedPayment() {
         UUID landlordId = UUID.randomUUID();
         InvoiceResponse submitted = withSubmittedPayment(
@@ -235,7 +271,7 @@ class BillingServiceTest {
                 submitted.electricityAmount(), submitted.totalAmount(), InvoiceStatus.PAID,
                 submitted.submittedPaymentUtr(), Instant.now(),
                 null, null,
-                submitted.createdAt(), Instant.now()
+                submitted.publicPaymentToken(), submitted.createdAt(), Instant.now()
         );
         when(repository.findInvoice(landlordId, submitted.id()))
                 .thenReturn(Optional.of(submitted), Optional.of(paid));
@@ -269,7 +305,8 @@ class BillingServiceTest {
                 submitted.previousReading(), submitted.currentReading(),
                 submitted.electricityRate(), submitted.electricityUnits(),
                 submitted.electricityAmount(), submitted.totalAmount(), InvoiceStatus.PENDING,
-                null, null, null, null, submitted.createdAt(), Instant.now()
+                null, null, null, null,
+                submitted.publicPaymentToken(), submitted.createdAt(), Instant.now()
         );
         when(repository.findInvoice(landlordId, submitted.id()))
                 .thenReturn(Optional.of(submitted), Optional.of(pending));
@@ -335,6 +372,7 @@ class BillingServiceTest {
                 null,
                 null,
                 null,
+                "pay_test_token_12345678901234567890",
                 Instant.now(),
                 Instant.now()
         );
@@ -351,7 +389,7 @@ class BillingServiceTest {
                 invoice.electricityRate(), invoice.electricityUnits(),
                 invoice.electricityAmount(), invoice.totalAmount(), invoice.status(),
                 invoice.paymentUtr(), invoice.paidAt(), utr, Instant.now(),
-                invoice.createdAt(), invoice.updatedAt()
+                invoice.publicPaymentToken(), invoice.createdAt(), invoice.updatedAt()
         );
     }
 

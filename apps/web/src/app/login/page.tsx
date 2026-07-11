@@ -30,7 +30,7 @@ export default function LoginPage() {
         }),
       });
 
-      storeSession(session, form.get("remember") === "on");
+      storeSession(session);
       const user = await getCurrentUser();
       router.push(user.role === "TENANT" ? "/tenant-dashboard" : "/dashboard");
     } catch (requestError) {
@@ -98,15 +98,6 @@ export default function LoginPage() {
               required
             />
           </div>
-
-          <label className="flex cursor-pointer items-center gap-3 text-sm text-[#475569]">
-            <input
-              className="size-4 accent-[#0F766E]"
-              name="remember"
-              type="checkbox"
-            />
-            Keep me signed in on this device
-          </label>
 
           {error ? <FormNotice variant="error">{error}</FormNotice> : null}
 

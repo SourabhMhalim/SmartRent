@@ -51,6 +51,19 @@ class PropertyServiceTest {
     }
 
     @Test
+    void rejectsCreatingMoreThanThreeActiveProperties() {
+        UUID landlordId = UUID.randomUUID();
+        PropertyRequest request = propertyRequest();
+        when(repository.countActiveProperties(landlordId)).thenReturn(3);
+
+        assertThatThrownBy(() -> service.createProperty(landlordId, request))
+                .isInstanceOf(DomainException.class)
+                .hasMessage("This portfolio version supports up to 3 active properties per landlord.");
+
+        verify(repository, never()).createProperty(landlordId, request);
+    }
+
+    @Test
     void rejectsArchivingAPropertyWithOccupiedUnits() {
         UUID landlordId = UUID.randomUUID();
         UUID propertyId = UUID.randomUUID();
@@ -95,6 +108,22 @@ class PropertyServiceTest {
         assertThatThrownBy(() -> service.createUnit(landlordId, propertyId, request))
                 .isInstanceOf(DomainException.class)
                 .hasMessage("A unit with this number already exists in the property.");
+
+        verify(repository, never()).createUnit(landlordId, propertyId, request);
+    }
+
+    @Test
+    void rejectsCreatingMoreThanFiveActiveUnitsInAProperty() {
+        UUID landlordId = UUID.randomUUID();
+        UUID propertyId = UUID.randomUUID();
+        UnitRequest request = unitRequest();
+        when(repository.findProperty(landlordId, propertyId))
+                .thenReturn(Optional.of(property(propertyId, 0)));
+        when(repository.countActiveUnits(landlordId, propertyId)).thenReturn(5);
+
+        assertThatThrownBy(() -> service.createUnit(landlordId, propertyId, request))
+                .isInstanceOf(DomainException.class)
+                .hasMessage("This portfolio version supports up to 5 active units per property.");
 
         verify(repository, never()).createUnit(landlordId, propertyId, request);
     }

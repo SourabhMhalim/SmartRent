@@ -9,12 +9,12 @@ export default async function PublicInvoicePaymentPage({
 }: {
   params: Promise<{ invoiceId: string }>;
 }) {
-  const { invoiceId } = await params;
+  const { invoiceId: publicPaymentToken } = await params;
   let invoice: PublicInvoicePayment | undefined;
   let error: string | undefined;
 
   try {
-    invoice = await getPublicInvoicePayment(invoiceId);
+    invoice = await getPublicInvoicePayment(publicPaymentToken);
   } catch (loadError) {
     error =
       loadError instanceof Error
