@@ -30,7 +30,7 @@ export function DashboardAuthGuard({
           router.replace("/tenant-dashboard");
           return;
         }
-        setSession(currentSession);
+        setSession(getSession() ?? currentSession);
       })
       .catch(() => {
         if (!active) {

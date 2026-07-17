@@ -31,3 +31,10 @@ Thumbs.db
 *.log
 npm-debug.log*
 pnpm-debug.log*
+
+# Local deployment material
+tmp/
+*.pem
+*.key
+*_deploy
+*_deploy.pub

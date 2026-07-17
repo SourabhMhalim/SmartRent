@@ -64,6 +64,15 @@ class AuthRequestValidationTest {
     }
 
     @Test
+    void rejectsBlankRefreshToken() {
+        AuthController.RefreshRequest request = new AuthController.RefreshRequest(" ");
+
+        assertThat(validator.validate(request))
+                .extracting(violation -> violation.getPropertyPath().toString())
+                .containsExactly("refreshToken");
+    }
+
+    @Test
     void rejectsWeakResetPasswordLength() {
         AuthController.ResetPasswordRequest request =
                 new AuthController.ResetPasswordRequest("short");
