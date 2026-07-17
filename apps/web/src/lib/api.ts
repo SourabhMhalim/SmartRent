@@ -1,4 +1,8 @@
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL ??
+  (process.env.NODE_ENV === "production"
+    ? "/app/smartrent"
+    : "http://localhost:8080");
 
 type ApiError = {
   message?: string;

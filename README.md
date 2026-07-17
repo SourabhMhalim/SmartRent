@@ -3,6 +3,17 @@
 SmartRent is a landlord and tenant rent-management workspace backed by a
 Spring Boot API, Supabase PostgreSQL/Auth, and a Next.js web app.
 
+The repository also contains Sourabh Mhalim's portfolio. In production, the
+single domain is routed as follows:
+
+- `https://sourabhmhalim.in/` serves `apps/portfolio`.
+- `https://sourabhmhalim.in/app/smartrent` serves `apps/web`.
+- `https://sourabhmhalim.in/app/smartrent/api/*` proxies to the Spring Boot API.
+
+Nginx is the public entry point. The portfolio listens on `127.0.0.1:3001`,
+SmartRent listens on `127.0.0.1:3000`, and the API listens on
+`127.0.0.1:8080`. Deployment templates are in `tmp/`.
+
 ## Local services
 
 Run the API from `api/`:
@@ -16,6 +27,16 @@ Run the web app from `apps/web/`:
 ```powershell
 .\node_modules\.bin\next.cmd dev
 ```
+
+Run the portfolio from `apps/portfolio/`:
+
+```powershell
+corepack pnpm install
+corepack pnpm dev
+```
+
+Local SmartRent development remains at `/`. A production build automatically
+uses `/app/smartrent` as its base path and same-origin API prefix.
 
 Health check:
 
