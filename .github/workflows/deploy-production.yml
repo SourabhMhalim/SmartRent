@@ -74,19 +74,19 @@ jobs:
           sudo systemctl is-active --quiet smartrent-web
           sudo systemctl is-active --quiet smartrent-portfolio
 
-          curl --fail --silent --show-error --retry 10 --retry-delay 3 \
+          curl --fail --silent --show-error --retry 10 --retry-delay 3 --retry-all-errors \
             http://127.0.0.1:8080/api/health >/dev/null
-          curl --fail --silent --show-error --retry 10 --retry-delay 3 \
+          curl --fail --silent --show-error --retry 10 --retry-delay 3 --retry-all-errors \
             http://127.0.0.1:3000/app/smartrent/login >/dev/null
-          curl --fail --silent --show-error --retry 10 --retry-delay 3 \
+          curl --fail --silent --show-error --retry 10 --retry-delay 3 --retry-all-errors \
             http://127.0.0.1:3001/ >/dev/null
           REMOTE
 
       - name: Verify public endpoints
         run: |
-          curl --fail --silent --show-error --retry 5 --retry-delay 3 \
+          curl --fail --silent --show-error --retry 5 --retry-delay 3 --retry-all-errors \
             https://sourabhmhalim.in/app/smartrent/login >/dev/null
-          curl --fail --silent --show-error --retry 5 --retry-delay 3 \
+          curl --fail --silent --show-error --retry 5 --retry-delay 3 --retry-all-errors \
             https://sourabhmhalim.in/app/smartrent/api/health >/dev/null
-          curl --fail --silent --show-error --retry 5 --retry-delay 3 \
+          curl --fail --silent --show-error --retry 5 --retry-delay 3 --retry-all-errors \
             https://sourabhmhalim.in/ >/dev/null
