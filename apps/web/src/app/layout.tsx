@@ -1,6 +1,10 @@
 import type { Metadata } from "next";
 import { Inter, Manrope } from "next/font/google";
+import { PwaInstall } from "@/components/pwa-install";
 import "./globals.css";
+
+const basePath = process.env.NEXT_PUBLIC_BASE_PATH ??
+  (process.env.NODE_ENV === "production" ? "/app/smartrent" : "");
 
 const inter = Inter({
   variable: "--font-body",
@@ -15,6 +19,13 @@ const manrope = Manrope({
 export const metadata: Metadata = {
   title: "SmartRent",
   description: "Tenant management and rent billing.",
+  applicationName: "SmartRent",
+  manifest: `${basePath}/manifest.webmanifest`,
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "SmartRent",
+  },
   icons: {
     icon: [
       { url: "/icon.png", type: "image/png" },
@@ -30,7 +41,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${inter.variable} ${manrope.variable}`}>{children}</body>
+      <body className={`${inter.variable} ${manrope.variable}`}>
+        {children}
+        <PwaInstall basePath={basePath} />
+      </body>
     </html>
   );
 }
