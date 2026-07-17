@@ -38,6 +38,11 @@ public class AuthController {
         return ResponseEntity.ok(authService.login(request));
     }
 
+    @PostMapping("/refresh")
+    public ResponseEntity<Object> refresh(@Valid @RequestBody RefreshRequest request) {
+        return ResponseEntity.ok(authService.refresh(request.refreshToken()));
+    }
+
     @PostMapping("/forgot-password")
     public ResponseEntity<MessageResponse> forgotPassword(
             @Valid @RequestBody ForgotPasswordRequest request
@@ -109,6 +114,13 @@ public class AuthController {
         public ForgotPasswordRequest {
             email = cleanLowercase(email);
         }
+    }
+
+    public record RefreshRequest(
+            @NotBlank(message = "Refresh token is required.")
+            @Size(max = 4096, message = "Refresh token is invalid.")
+            String refreshToken
+    ) {
     }
 
     public record ResetPasswordRequest(

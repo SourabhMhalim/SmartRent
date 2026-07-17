@@ -1,0 +1,92 @@
+name: Deploy production
+
+on:
+  workflow_run:
+    workflows: [CI]
+    branches: [main]
+    types: [completed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy verified main commit
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Validate deployment secrets
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          for name in DEPLOY_HOST DEPLOY_USER DEPLOY_PATH DEPLOY_SSH_KEY DEPLOY_KNOWN_HOSTS; do
+            test -n "${!name}" || { echo "Missing required secret: $name"; exit 1; }
+          done
+
+      - name: Configure SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Deploy exact verified revision
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          REVISION: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          ssh -i ~/.ssh/deploy_key "$DEPLOY_USER@$DEPLOY_HOST" \
+            "DEPLOY_PATH='$DEPLOY_PATH' REVISION='$REVISION' bash -s" <<'REMOTE'
+          set -euo pipefail
+          cd "$DEPLOY_PATH"
+          git fetch --prune origin main
+          git checkout main
+          git reset --hard "$REVISION"
+
+          cd "$DEPLOY_PATH/api"
+          mvn --batch-mode -DskipTests package
+
+          cd "$DEPLOY_PATH/apps/web"
+          corepack pnpm install --frozen-lockfile
+          corepack pnpm build
+
+          cd "$DEPLOY_PATH/apps/portfolio"
+          corepack pnpm install --frozen-lockfile
+          corepack pnpm build
+
+          sudo systemctl restart smartrent-api smartrent-web smartrent-portfolio
+          sudo systemctl is-active --quiet smartrent-api
+          sudo systemctl is-active --quiet smartrent-web
+          sudo systemctl is-active --quiet smartrent-portfolio
+
+          curl --fail --silent --show-error --retry 10 --retry-delay 3 \
+            http://127.0.0.1:8080/api/health >/dev/null
+          curl --fail --silent --show-error --retry 10 --retry-delay 3 \
+            http://127.0.0.1:3000/app/smartrent/login >/dev/null
+          curl --fail --silent --show-error --retry 10 --retry-delay 3 \
+            http://127.0.0.1:3001/ >/dev/null
+          REMOTE
+
+      - name: Verify public endpoints
+        run: |
+          curl --fail --silent --show-error --retry 5 --retry-delay 3 \
+            https://sourabhmhalim.in/app/smartrent/login >/dev/null
+          curl --fail --silent --show-error --retry 5 --retry-delay 3 \
+            https://sourabhmhalim.in/app/smartrent/api/health >/dev/null
+          curl --fail --silent --show-error --retry 5 --retry-delay 3 \
+            https://sourabhmhalim.in/ >/dev/null

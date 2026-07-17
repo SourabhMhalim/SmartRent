@@ -1,171 +1,40 @@
-# SmartRent Details
+# SmartRent Project Status
 
-This file is for learning notes, setup decisions, and safe environment guidance.
-Do not store real secrets here.
+SmartRent is a production full-stack rental-management application. The original
+learning plan has been completed and this file now records the current state.
 
-## Important Security Note
-
-Real Supabase keys, service role keys, database passwords, SMTP passwords, and deployment secrets must stay only in local `.env` files or deployment dashboards.
-
-If a real secret was written into this repository before, rotate it before using the project seriously.
-
-## Current Direction
-
-We are restarting SmartRent from zero, slowly.
-
-The goal is not to generate a complete application in one pass. The goal is to learn each layer and build one small working feature at a time.
-
-## Product Idea
-
-SmartRent is a rental management application for landlords.
-
-The first version should help a landlord:
-
-- add a property
-- add rooms or units
-- add tenants
-- create a lease
-- enter monthly electricity meter readings
-- generate rent bills
-- show a UPI payment link or QR
-- manually mark a bill as paid
-
-Tenant login, notifications, reports, mobile apps, and production deployment are later phases.
-
-## Learning-First Stack
-
-We will keep the original stack, but introduce it slowly.
-
-| Layer | Technology | When We Learn It |
-| --- | --- | --- |
-| Frontend | Next.js, TypeScript, Tailwind | after the backend data model is understood |
-| Backend | Java 21, Spring Boot 3 | first |
-| Database | PostgreSQL / Supabase | first |
-| Auth | Supabase Auth / JWT | after basic CRUD |
-| Payments | UPI link / QR only | after invoices work |
-| PDF | OpenPDF | after invoice data is correct |
-| Deployment | Vercel + backend host | last |
-
-## Safe Environment Template
-
-## Supabase Project Values
-
-These values are safe to keep in documentation because they identify the project but do not grant admin access by themselves.
-
-```env
-SUPABASE_PROJECT_ID=szyzeroacnensxqnpgsw
-SUPABASE_REGION=ap-southeast-1
-SUPABASE_URL=https://szyzeroacnensxqnpgsw.supabase.co
-SUPABASE_JWKS_URL=https://szyzeroacnensxqnpgsw.supabase.co/auth/v1/.well-known/jwks.json
-```
-
-The publishable/anon key can be used by public clients, but we will still keep it in `.env` while learning so the setup habit stays clean.
-
-Never write these real values in this file:
-
-- `SUPABASE_SERVICE_ROLE_KEY`
-- `SPRING_DATASOURCE_PASSWORD`
-- `DATABASE_URL` when it contains a password
-- production deployment secrets
-
-Create a local `.env` file when the project is ready for backend setup.
-
-```env
-# Supabase
-SUPABASE_URL=https://szyzeroacnensxqnpgsw.supabase.co
-SUPABASE_PROJECT_ID=szyzeroacnensxqnpgsw
-SUPABASE_JWKS_URL=https://szyzeroacnensxqnpgsw.supabase.co/auth/v1/.well-known/jwks.json
-SUPABASE_PUBLISHABLE_KEY=
-SUPABASE_SERVICE_ROLE_KEY=
-
-# PostgreSQL
-SPRING_DATASOURCE_URL=
-SPRING_DATASOURCE_USERNAME=
-SPRING_DATASOURCE_PASSWORD=
-DATABASE_URL=
-
-# Application
-NEXT_PUBLIC_API_URL=http://localhost:8080
-
-# Email notifications (optional)
-EMAIL_NOTIFICATIONS_ENABLED=false
-SMTP_HOST=
-SMTP_PORT=587
-SMTP_USERNAME=
-SMTP_PASSWORD=
-SMTP_FROM=
-SMTP_FROM_NAME=SmartRent
-```
-
-For the frontend, create `apps/web/.env.local` only when the frontend exists.
-
-```env
-NEXT_PUBLIC_API_URL=http://localhost:8080
-```
-
-Do not add `NEXT_PUBLIC_SUPABASE_*` variables unless we intentionally decide that the browser should talk to Supabase. For the current learning plan, the frontend should call our backend API.
-
-## Local Tools To Check
-
-Before coding, verify these tools one by one:
-
-```powershell
-java -version
-mvn -version
-node -v
-pnpm -v
-git --version
-docker --version
-```
-
-## Architecture Decision For The Restart
-
-Start simple:
+## Production architecture
 
 ```text
-Browser -> Spring Boot API -> PostgreSQL/Supabase
+Browser/PWA -> Nginx -> Next.js web -> Spring Boot API -> Supabase PostgreSQL/Auth
 ```
 
-Later, if the project grows, we can split into:
+- Portfolio: `https://sourabhmhalim.in/`
+- SmartRent: `https://sourabhmhalim.in/app/smartrent`
+- API: `https://sourabhmhalim.in/app/smartrent/api`
 
-```text
-Browser -> API Gateway -> Core/Billing/Ops Services -> PostgreSQL/Supabase
-```
+## Delivered features
 
-For learning, one backend service is better. It makes the database, API, validation, and business rules easier to understand.
+- Landlord and tenant registration, login, password recovery, and automatic session refresh
+- Role-scoped landlord and tenant dashboards
+- Property, unit, tenant, and lease management
+- Invoice generation with rent and electricity calculations
+- UPI QR payments and UTR review
+- PDF invoices and notifications
+- Installable Android/iOS PWA
+- Production deployment behind Nginx and systemd
 
-## First MVP Boundary
+## Security model
 
-Included:
+- Supabase issues and validates authentication tokens.
+- The backend validates JWTs and scopes data by authenticated user ID.
+- Production runtime secrets stay in `/opt/smartrent/.env` with mode `600`.
+- Deployment credentials belong in GitHub Actions secrets, never in the repository.
+- Browser code receives no service-role key or database credential.
 
-- landlord-only login
-- properties
-- units
-- tenants
-- leases
-- meter readings
-- invoices
-- manual payments
-- UPI payment link
+## Current engineering workflow
 
-Not included yet:
+Feature and fix branches target `develop`. After CI passes, `develop` is merged
+into `main`. A successful CI run on `main` triggers the production deployment.
 
-- tenant portal
-- WhatsApp/SMS
-- PDF invoices
-- dashboards and charts
-- property manager role
-- mobile app
-- production deployment
-
-## Personal Learning Rule
-
-For each feature:
-
-1. Understand the business rule.
-2. Draw the database table.
-3. Write the backend API.
-4. Test the API manually.
-5. Build the frontend screen.
-6. Review what was learned.
-7. Commit only when it works.
+See [README.md](README.md) for setup and [plan.md](plan.md) for remaining work.
