@@ -12,7 +12,8 @@ single domain is routed as follows:
 
 Nginx is the public entry point. The portfolio listens on `127.0.0.1:3001`,
 SmartRent listens on `127.0.0.1:3000`, and the API listens on
-`127.0.0.1:8080`. Deployment templates are in `tmp/`.
+`127.0.0.1:8080`. Production service configuration and secrets live on the
+server; local deployment credentials and scratch files under `tmp/` are ignored.
 
 ## Local services
 
@@ -43,6 +44,38 @@ Health check:
 ```powershell
 Invoke-RestMethod http://localhost:8080/api/health
 ```
+
+## Branch and release workflow
+
+```text
+feature/fix branch -> pull request to develop -> CI -> merge
+develop -> pull request to main -> CI -> merge -> production deployment
+```
+
+`develop` is the integration branch and `main` is production. CI validates the
+Spring Boot API, SmartRent web app, and portfolio. Production deployment runs
+only after CI succeeds for a commit on `main`.
+
+Required GitHub Actions secrets:
+
+- `DEPLOY_HOST`
+- `DEPLOY_USER`
+- `DEPLOY_PATH`
+- `DEPLOY_SSH_KEY`
+- `DEPLOY_KNOWN_HOSTS`
+
+The deployment SSH key is dedicated to GitHub Actions. Do not reuse a personal
+SSH key or keep a plaintext copy inside the repository workspace.
+
+Application and database secrets are not GitHub build secrets. They remain in
+the production server's `/opt/smartrent/.env`, readable only by the service user.
+
+## PWA installation
+
+- Android Chrome: open SmartRent and choose **Install app**.
+- iPhone/iPad: open SmartRent in Safari, tap **Share**, then **Add to Home Screen**.
+
+The PWA uses the same SmartRent account and data as the website.
 
 ## Important local workflow note
 

@@ -198,6 +198,14 @@ public class SupabaseAuthService {
                 .body(JsonNode.class));
     }
 
+    public JsonNode refresh(String refreshToken) {
+        return execute(() -> restClient.post()
+                .uri("/token?grant_type=refresh_token")
+                .body(Map.of("refresh_token", refreshToken))
+                .retrieve()
+                .body(JsonNode.class));
+    }
+
     public void sendPasswordReset(AuthController.ForgotPasswordRequest request) {
         execute(() -> restClient.post()
                 .uri(uriBuilder -> uriBuilder

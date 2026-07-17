@@ -12,6 +12,7 @@ export type AuthSession = {
   access_token: string;
   refresh_token: string;
   expires_in: number;
+  expires_at?: number;
   token_type: string;
   user: {
     id: string;
@@ -23,6 +24,8 @@ export type AuthSession = {
     };
   };
 };
+
+let refreshRequest: Promise<AuthSession> | null = null;
 
 export type CurrentUser = {
   id: string;
@@ -57,10 +60,7 @@ export async function authenticatedApiRequest<T>(
   path: string,
   options: RequestInit = {},
 ): Promise<T> {
-  const session = getSession();
-  if (!session) {
-    throw new Error("Your session has expired. Please sign in again.");
-  }
+  const session = await getValidSession();
 
   return apiRequest<T>(path, {
     ...options,
@@ -75,10 +75,7 @@ export async function authenticatedBlobRequest(
   path: string,
   options: RequestInit = {},
 ): Promise<Blob> {
-  const session = getSession();
-  if (!session) {
-    throw new Error("Your session has expired. Please sign in again.");
-  }
+  const session = await getValidSession();
 
   const response = await fetch(`${API_URL}${path}`, {
     ...options,
@@ -102,7 +99,11 @@ export function getCurrentUser() {
 
 export function storeSession(session: AuthSession) {
   clearSession();
-  sessionStorage.setItem("smartrent_session", JSON.stringify(session));
+  const normalized = {
+    ...session,
+    expires_at: session.expires_at ?? Math.floor(Date.now() / 1000) + session.expires_in,
+  };
+  sessionStorage.setItem("smartrent_session", JSON.stringify(normalized));
 }
 
 export function getSession(): AuthSession | null {
@@ -116,7 +117,7 @@ export function getSession(): AuthSession | null {
     const session = JSON.parse(stored) as AuthSession;
     const payload = parseJwtPayload(session.access_token);
 
-    if (!session.access_token || !payload.exp || payload.exp * 1000 <= Date.now()) {
+    if (!session.access_token || !session.refresh_token || !payload.exp) {
       clearSession();
       return null;
     }
@@ -126,6 +127,38 @@ export function getSession(): AuthSession | null {
     clearSession();
     return null;
   }
+}
+
+export async function getValidSession(): Promise<AuthSession> {
+  const session = getSession();
+  if (!session) {
+    throw new Error("Your session has expired. Please sign in again.");
+  }
+
+  const payload = parseJwtPayload(session.access_token);
+  if (payload.exp && payload.exp * 1000 > Date.now() + 30_000) {
+    return session;
+  }
+
+  if (!refreshRequest) {
+    refreshRequest = apiRequest<AuthSession>("/api/auth/refresh", {
+      method: "POST",
+      body: JSON.stringify({ refreshToken: session.refresh_token }),
+    })
+      .then((refreshed) => {
+        storeSession(refreshed);
+        return getSession() ?? refreshed;
+      })
+      .catch((error) => {
+        clearSession();
+        throw error;
+      })
+      .finally(() => {
+        refreshRequest = null;
+      });
+  }
+
+  return refreshRequest;
 }
 
 export function clearSession() {
