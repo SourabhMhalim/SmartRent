@@ -51,7 +51,7 @@ jobs:
           REVISION: ${{ github.event.workflow_run.head_sha }}
         run: |
           ssh -i ~/.ssh/deploy_key "$DEPLOY_USER@$DEPLOY_HOST" \
-            "DEPLOY_PATH='$DEPLOY_PATH' REVISION='$REVISION' bash -s" <<'REMOTE'
+            "DEPLOY_PATH='$DEPLOY_PATH' DEPLOY_USER='$DEPLOY_USER' REVISION='$REVISION' bash -s" <<'REMOTE'
           set -euo pipefail
           cd "$DEPLOY_PATH"
           git fetch --prune origin main
@@ -69,10 +69,29 @@ jobs:
           corepack pnpm install --frozen-lockfile
           corepack pnpm build
 
-          sudo systemctl restart smartrent-api smartrent-web smartrent-portfolio
+          cd "$DEPLOY_PATH/apps/SplitSafari"
+          npm ci
+          npm run build
+
+          NODE_BIN="$(command -v node)"
+          DEPLOY_GROUP="$(id -gn "$DEPLOY_USER")"
+          UNIT_FILE="$(mktemp)"
+          sed \
+            -e "s|^User=.*|User=$DEPLOY_USER|" \
+            -e "s|^Group=.*|Group=$DEPLOY_GROUP|" \
+            -e "s|^WorkingDirectory=.*|WorkingDirectory=$DEPLOY_PATH/apps/SplitSafari|" \
+            -e "s|^ExecStart=.*|ExecStart=$NODE_BIN node_modules/next/dist/bin/next start --hostname 127.0.0.1 --port 3002|" \
+            "$DEPLOY_PATH/deploy/splitsafari.service" > "$UNIT_FILE"
+          sudo install -o root -g root -m 0644 "$UNIT_FILE" /etc/systemd/system/splitsafari.service
+          rm -f "$UNIT_FILE"
+          sudo systemctl daemon-reload
+          sudo systemctl enable splitsafari
+
+          sudo systemctl restart smartrent-api smartrent-web smartrent-portfolio splitsafari
           sudo systemctl is-active --quiet smartrent-api
           sudo systemctl is-active --quiet smartrent-web
           sudo systemctl is-active --quiet smartrent-portfolio
+          sudo systemctl is-active --quiet splitsafari
 
           curl --fail --silent --show-error --retry 10 --retry-delay 3 --retry-all-errors \
             http://127.0.0.1:8080/api/health >/dev/null
@@ -80,6 +99,12 @@ jobs:
             http://127.0.0.1:3000/app/smartrent/login >/dev/null
           curl --fail --silent --show-error --retry 10 --retry-delay 3 --retry-all-errors \
             http://127.0.0.1:3001/ >/dev/null
+          curl --fail --silent --show-error --retry 10 --retry-delay 3 --retry-all-errors \
+            http://127.0.0.1:3001/apps >/dev/null
+          curl --fail --silent --show-error --retry 10 --retry-delay 3 --retry-all-errors \
+            http://127.0.0.1:3002/app/SplitSafari >/dev/null
+          curl --fail --silent --show-error --retry 10 --retry-delay 3 --retry-all-errors \
+            http://127.0.0.1:3002/app/SplitSafari/api/safari >/dev/null
           REMOTE
 
       - name: Verify public endpoints
@@ -90,3 +115,7 @@ jobs:
             https://sourabhmhalim.in/app/smartrent/api/health >/dev/null
           curl --fail --silent --show-error --retry 5 --retry-delay 3 --retry-all-errors \
             https://sourabhmhalim.in/ >/dev/null
+          curl --fail --silent --show-error --retry 5 --retry-delay 3 --retry-all-errors \
+            https://sourabhmhalim.in/apps >/dev/null
+          curl --fail --silent --show-error --retry 5 --retry-delay 3 --retry-all-errors \
+            https://sourabhmhalim.in/app/SplitSafari >/dev/null

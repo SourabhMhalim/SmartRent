@@ -4,6 +4,7 @@ node_modules/
 
 # Next.js
 .next/
+.next-*/
 out/
 apps/web/.env*.local
 apps/web/.vercel/

@@ -1,0 +1,23 @@
+[Unit]
+Description=SplitSafari shared-expense app
+After=network.target
+
+[Service]
+Type=simple
+User=smartrent
+Group=smartrent
+WorkingDirectory=/opt/smartrent/apps/SplitSafari
+Environment=NODE_ENV=production
+Environment=SPLITSAFARI_DATABASE_PATH=/var/lib/splitsafari/splitsafari.sqlite
+EnvironmentFile=-/etc/splitsafari.env
+ExecStart=/usr/bin/node node_modules/next/dist/bin/next start --hostname 127.0.0.1 --port 3002
+Restart=on-failure
+RestartSec=5
+StateDirectory=splitsafari
+StateDirectoryMode=0700
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

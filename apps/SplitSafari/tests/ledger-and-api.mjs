@@ -1,0 +1,22 @@
+import assert from 'node:assert/strict';
+import { cents, split, balances, transfers } from '../lib/ledger.ts';
+assert.deepEqual(split(100,['a','b','c'],'equal'),{a:34,b:33,c:33});
+assert.deepEqual(split(101,['a','b'],'percentage',{a:'50',b:'50'}),{a:51,b:50});
+assert.throws(()=>split(100,['a','b'],'exact',{a:'0.20',b:'0.30'}));
+assert.throws(()=>cents('-1'));assert.throws(()=>cents('0'));assert.throws(()=>cents('1.001'));
+const base=(process.env.SPLITSAFARI_TEST_ORIGIN||'http://localhost:3002')+'/app/SplitSafari/api/safari';
+async function request(body,cookie){const r=await fetch(base,{method:body?'POST':'GET',headers:{...(body?{'Content-Type':'application/json'}:{}),...(cookie?{cookie}:{})},body:body?JSON.stringify(body):undefined});return {status:r.status,data:await r.json(),cookie:r.headers.get('set-cookie')?.split(';')[0]};}
+assert.equal((await request()).data.group,null);
+assert.equal((await request({action:'expense'})).status,401);
+const created=await request({action:'create',name:'Organiser',groupName:'Verification group',names:['Priya','Amit','Excluded']});assert.equal(created.status,200);
+const cookie=created.cookie;const g=created.data.group;const ids=g.members.map(m=>m.id);
+const expense=await request({action:'expense',title:'Dinner',amount:'900',payer:ids[0],date:'2026-09-28',mode:'equal',participants:ids.slice(0,3),values:{}},cookie);assert.equal(expense.status,200);assert.deepEqual(Object.values(balances(expense.data.group)),[60000,-30000,-30000,0]);
+assert.equal((await request({action:'join',token:'invalid'})).status,400);
+const invite=await request({action:'invite',memberId:ids[1]},cookie);const joined=await request({action:'join',token:invite.data.token});assert.equal(joined.data.me,ids[1]);assert.equal(joined.data.group.members[1].connected,true);
+assert.equal((await request({action:'invite',memberId:ids[2]},joined.cookie)).status,403);
+assert.equal((await request({action:'delete',id:expense.data.group.expenses[0].id},joined.cookie)).status,403);
+const partial=await request({action:'settle',from:ids[1],to:ids[0],amount:'100'},joined.cookie);assert.equal(partial.status,200);assert.equal(balances(partial.data.group)[ids[1]],-20000);assert.equal(Object.values(balances(partial.data.group)).reduce((a,b)=>a+b),0);
+assert.equal((await request({action:'settle',from:ids[1],to:ids[0],amount:'201'},joined.cookie)).status,400);
+assert.equal((await request({action:'expense',title:'Invalid',amount:'900',payer:ids[0],date:'2026-09-28',mode:'equal',participants:['stranger'],values:{}},cookie)).status,400);
+const removed=await request({action:'delete',id:expense.data.group.expenses[0].id},cookie);assert.equal(removed.status,200);assert.equal(removed.data.group.expenses.length,0);assert.equal(transfers(removed.data.group)[0].amount,10000);
+console.log('PASS: rounding, split validation, invite identity, private access, permissions, partial settlement, overpayment rejection and deletion recalculation.');

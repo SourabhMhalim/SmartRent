@@ -182,7 +182,7 @@ a:focus-visible { outline: 2px solid var(--coffee-dark); outline-offset: 4px; }
 }
 
 @media (max-width: 760px) {
-  .site-header { width: calc(100% - 28px); height: 74px; padding: 0 4px; }
+  .site-header { width: calc(100% - 28px); height: auto; min-height: 74px; padding: 14px 4px; flex-wrap: wrap; gap: 12px; }
   .brand { font-size: 15px; gap: 10px; }
   .brand-mark { width: 39px; height: 39px; }
   nav { gap: 17px; }

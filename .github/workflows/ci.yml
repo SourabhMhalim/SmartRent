@@ -14,6 +14,35 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  splitsafari:
+    name: SplitSafari web
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/SplitSafari
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: apps/SplitSafari/package-lock.json
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm run build
+      - name: Verify API and access controls with an isolated database
+        run: |
+          export SPLITSAFARI_DATABASE_PATH="$RUNNER_TEMP/splitsafari-test.sqlite"
+          export SPLITSAFARI_TEST_ORIGIN=http://127.0.0.1:3002
+          npm start > "$RUNNER_TEMP/splitsafari.log" 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" || true' EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent "$SPLITSAFARI_TEST_ORIGIN/app/SplitSafari/api/safari"; then break; fi
+            sleep 1
+          done
+          npm run test:api
+
   api:
     name: API tests
     runs-on: ubuntu-latest

@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 const skills = [
   "Java & J2EE",
   "Spring Boot",
@@ -123,6 +125,7 @@ export default function Home() {
           <a href="#experience">Experience</a>
           <a href="#skills">Skills</a>
           <a href="#contact">Contact</a>
+          <Link href="/apps">Apps</Link>
           <a className="nav-profile" href="https://github.com/SourabhMhalim" target="_blank" rel="noreferrer">GitHub ↗</a>
         </nav>
       </header>
