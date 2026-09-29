@@ -41,6 +41,9 @@ export async function apiRequest<T>(
 ): Promise<T> {
   const response = await fetch(`${API_URL}${path}`, {
     ...options,
+    // Authenticated and mutable business data must never be satisfied from an
+    // HTTP cache. The PWA service worker also excludes all API requests.
+    cache: "no-store",
     headers: {
       "Content-Type": "application/json",
       ...options.headers,
@@ -79,6 +82,7 @@ export async function authenticatedBlobRequest(
 
   const response = await fetch(`${API_URL}${path}`, {
     ...options,
+    cache: "no-store",
     headers: {
       Authorization: `Bearer ${session.access_token}`,
       ...options.headers,

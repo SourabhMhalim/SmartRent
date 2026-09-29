@@ -7,11 +7,15 @@ The repository also contains Sourabh Mhalim's portfolio. In production, the
 single domain is routed as follows:
 
 - `https://sourabhmhalim.in/` serves `apps/portfolio`.
+- `https://sourabhmhalim.in/app/portfolio` also opens the portfolio.
+- `https://sourabhmhalim.in/apps` lists SmartRent and SplitSafari with launch links.
 - `https://sourabhmhalim.in/app/smartrent` serves `apps/web`.
+- `/app/Smartrent` redirects to `/app/smartrent` for compatibility.
+- `https://sourabhmhalim.in/app/SplitSafari` serves `apps/SplitSafari` (case-sensitive).
 - `https://sourabhmhalim.in/app/smartrent/api/*` proxies to the Spring Boot API.
 
 Nginx is the public entry point. The portfolio listens on `127.0.0.1:3001`,
-SmartRent listens on `127.0.0.1:3000`, and the API listens on
+SmartRent listens on `127.0.0.1:3000`, SplitSafari listens on `127.0.0.1:3002`, and the API listens on
 `127.0.0.1:8080`. Production service configuration and secrets live on the
 server; local deployment credentials and scratch files under `tmp/` are ignored.
 
@@ -39,6 +43,24 @@ corepack pnpm dev
 Local SmartRent development remains at `/`. A production build automatically
 uses `/app/smartrent` as its base path and same-origin API prefix.
 
+Run SplitSafari from `apps/SplitSafari/` using Node 22.13+:
+
+```powershell
+npm ci
+npm run dev
+```
+
+Open `http://localhost:3001/apps` to launch either application through the portfolio.
+For that combined local workflow, start SmartRent with
+`$env:NEXT_PUBLIC_BASE_PATH = "/app/smartrent"` before its dev command.
+SplitSafari always uses `/app/SplitSafari`; its personal invitations, API, assets,
+and session cookies stay under that prefix. Its existing Alibag sample and other
+local groups are preserved in the ignored `apps/SplitSafari/data/` directory.
+This is independent of SmartRent's database and authentication.
+
+See [SplitSafari server setup](deploy/README.md) for the Node service, Nginx route,
+and persistent database path required before the first production deployment.
+
 Health check:
 
 ```powershell
@@ -53,7 +75,7 @@ develop -> pull request to main -> CI -> merge -> production deployment
 ```
 
 `develop` is the integration branch and `main` is production. CI validates the
-Spring Boot API, SmartRent web app, and portfolio. Production deployment runs
+Spring Boot API, SmartRent web app, SplitSafari, and portfolio. Production deployment runs
 only after CI succeeds for a commit on `main`.
 
 Required GitHub Actions secrets:
